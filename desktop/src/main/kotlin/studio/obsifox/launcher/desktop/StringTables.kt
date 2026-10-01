@@ -1,0 +1,141 @@
+package studio.obsifox.launcher.desktop
+
+object StringTables {
+    val en: Map<String, String> = mapOf(
+        // navigation
+        "nav_home" to "Home", "nav_instances" to "Profiles", "nav_browse" to "Modrinth", "nav_accounts" to "Accounts",
+        "nav_settings" to "Settings", "nav_console" to "Console",
+        // common
+        "ok" to "OK", "cancel" to "Cancel", "close" to "Close", "save" to "Save", "delete" to "Delete", "create" to "Create",
+        "install" to "Install", "installed" to "Installed", "update" to "Update", "remove" to "Remove", "search" to "Search",
+        "loading" to "Loading…", "retry" to "Retry", "back" to "Back", "copy" to "Copy", "copied" to "Copied",
+        "open_folder" to "Open folder", "open_in_browser" to "Open in browser", "none" to "None", "auto" to "Automatic",
+        "error" to "Something went wrong", "details" to "Details", "select" to "Select", "active" to "Active",
+        // home
+        "home_title" to "Ready to play?", "home_sub" to "Pick a profile and an account, then jump in.",
+        "play" to "Play", "playing" to "Running", "stop" to "Stop", "running" to "Running",
+        "last_played" to "Last played: %s", "never_played" to "Never played", "play_time" to "Play time: %s",
+        "no_instance_title" to "No profiles yet", "no_instance_text" to "Create a profile to install a Minecraft version and a mod loader.",
+        "create_instance" to "Create profile", "recent" to "Your profiles", "playing_as" to "Playing as",
+        "no_account" to "Add an account first", "dur_hm" to "%dh %dm", "dur_m" to "%d min",
+        // instances
+        "instances_title" to "Profiles", "new_instance" to "New profile", "import_mrpack" to "Import .mrpack",
+        "instance_name" to "Profile name", "mc_version" to "Minecraft version", "loader" to "Mod loader", "loader_version" to "Loader version",
+        "show_snapshots" to "Show snapshots", "version_filter" to "Filter versions", "latest" to "latest", "recommended" to "recommended",
+        "empty_instances" to "Nothing here yet. Create your first profile!", "duplicate" to "Duplicate", "copy_suffix" to "%s (copy)",
+        "delete_title" to "Delete profile?", "delete_text" to "\"%s\" and all of its worlds, mods and settings will be permanently deleted.",
+        "profile_settings" to "Settings", "launch_failed" to "Could not start the game",
+        // instance detail
+        "tab_mods" to "Mods", "tab_resourcepacks" to "Resource packs", "tab_shaders" to "Shaders", "tab_settings" to "Settings",
+        "java_path" to "Java executable", "java_auto" to "Automatic (recommended)", "memory_max" to "Maximum memory", "memory_min" to "Initial memory",
+        "jvm_args" to "JVM arguments", "game_args" to "Game arguments", "resolution" to "Window size", "width" to "Width", "height" to "Height",
+        "fullscreen" to "Fullscreen", "auto_join" to "Join server on launch", "auto_join_hint" to "host or host:port, optional", "notes" to "Notes",
+        "check_updates" to "Check for updates", "updates_found" to "%d update(s) available", "no_updates" to "Everything is up to date",
+        "update_all" to "Update all", "add_from_modrinth" to "Add from Modrinth", "no_content" to "Nothing installed here yet.",
+        "identify" to "Recognise files", "identified" to "%d file(s) recognised", "unknown_source" to "Unknown source",
+        "loader_none_hint" to "This is a vanilla profile: mods need Fabric, Quilt, Forge or NeoForge.", "saved" to "Saved",
+        // browse
+        "browse_title" to "Modrinth", "search_hint" to "Search mods, modpacks, packs and shaders…",
+        "type_mod" to "Mods", "type_modpack" to "Modpacks", "type_resourcepack" to "Resource packs", "type_shader" to "Shaders",
+        "sort_by" to "Sort by", "sort_relevance" to "Relevance", "sort_downloads" to "Downloads", "sort_follows" to "Follows", "sort_newest" to "Newest", "sort_updated" to "Updated",
+        "target_profile" to "Install into", "load_more" to "Load more", "downloads_count" to "%s downloads", "by_author" to "by %s",
+        "choose_version" to "Choose version", "no_results" to "No results", "no_compatible" to "No compatible version for %s",
+        "installed_ok" to "Installed %s", "installed_with_deps" to "Installed %s (+%d dependencies)", "view_on_modrinth" to "View on Modrinth",
+        "need_profile" to "Create a profile first", "modpack_installed" to "Modpack \"%s\" is ready", "any_game_version" to "All versions",
+        "pick_version_title" to "Pick a version of %s", "version_meta" to "%s · %s", "filter_compatible" to "Only compatible with this profile",
+        // accounts
+        "accounts_title" to "Accounts", "add_microsoft" to "Sign in with Microsoft", "add_offline" to "Add offline account",
+        "offline_name" to "Player name", "offline_hint" to "1–16 letters, digits or underscore", "account_ms" to "Microsoft", "account_offline" to "Offline",
+        "ms_not_configured" to "Microsoft sign-in needs an Azure application ID that Mojang has approved. Paste yours in Settings (see docs/SETUP.md) – offline accounts work without it.",
+        "ms_title" to "Sign in with Microsoft", "ms_instructions" to "Open the page below and enter this code:", "ms_open_page" to "Open page", "ms_waiting" to "Waiting for you to finish in the browser…",
+        "ms_failed" to "Sign-in failed", "ms_success" to "Signed in as %s", "remove_account" to "Remove account", "offline_note" to "Offline accounts cannot join online-mode servers.",
+        "no_accounts" to "No accounts yet.",
+        // settings
+        "settings_title" to "Settings", "language" to "Language", "lang_auto" to "System default", "memory_default" to "Default maximum memory",
+        "jvm_default" to "Default JVM arguments", "java_override" to "Use this Java for every profile", "threads" to "Parallel downloads",
+        "mirror" to "Download source", "mirror_official" to "Official servers", "mirror_bmcl" to "BMCLAPI mirror (for regions where Mojang is slow)",
+        "proxy" to "HTTP proxy", "proxy_host" to "Host", "proxy_port" to "Port", "ms_client_id" to "Microsoft (Azure) application ID",
+        "ms_client_id_hint" to "Leave empty to use the one built into this release", "hide_launcher" to "Minimise the launcher while the game runs",
+        "open_console" to "Open the console when the game starts", "data_dir" to "Data folder", "about" to "About", "version" to "Version",
+        "about_text" to "ObsiLauncher is an unofficial launcher. Minecraft is a trademark of Mojang AB / Microsoft; this project is not affiliated with them.",
+        "apply" to "Apply", "memory_auto" to "Auto", "restart_hint" to "Language changes apply instantly.",
+        // tasks & stages
+        "launching" to "Launching %s", "creating" to "Creating %s", "installing" to "Installing %s", "stage_resolving" to "Preparing…",
+        "stage_libraries" to "Downloading libraries", "stage_assets" to "Downloading game assets", "stage_java" to "Preparing Java",
+        "stage_loader" to "Downloading loader installer", "stage_modpack" to "Downloading modpack", "stage_modpack_files" to "Downloading modpack files",
+        "stage_download" to "Downloading %s", "task_failed" to "Failed", "task_done" to "Done", "task_cancel" to "Cancel",
+        // console / crash
+        "console_title" to "Console", "console_empty" to "No game is running. Start a profile to see its output here.", "kill" to "Kill",
+        "crash_title" to "The game stopped unexpectedly", "crash_text" to "\"%s\" exited with code %d. The last lines of its output:", "view_log" to "Open full log",
+        "copy_log" to "Copy log", "game_exited" to "The game exited", "console_running" to "Running · PID %d",
+    )
+
+    val fa: Map<String, String> = mapOf(
+        // navigation
+        "nav_home" to "خانه", "nav_instances" to "پروفایل‌ها", "nav_browse" to "مودرینث", "nav_accounts" to "حساب‌ها",
+        "nav_settings" to "تنظیمات", "nav_console" to "کنسول",
+        // common
+        "ok" to "باشه", "cancel" to "انصراف", "close" to "بستن", "save" to "ذخیره", "delete" to "حذف", "create" to "ساخت",
+        "install" to "نصب", "installed" to "نصب شده", "update" to "به‌روزرسانی", "remove" to "حذف", "search" to "جستجو",
+        "loading" to "در حال بارگذاری…", "retry" to "تلاش دوباره", "back" to "بازگشت", "copy" to "کپی", "copied" to "کپی شد",
+        "open_folder" to "باز کردن پوشه", "open_in_browser" to "باز کردن در مرورگر", "none" to "هیچ", "auto" to "خودکار",
+        "error" to "مشکلی پیش آمد", "details" to "جزئیات", "select" to "انتخاب", "active" to "فعال",
+        // home
+        "home_title" to "آماده‌ی بازی هستی؟", "home_sub" to "یک پروفایل و یک حساب انتخاب کن و وارد دنیا شو.",
+        "play" to "شروع بازی", "playing" to "در حال اجرا", "stop" to "توقف", "running" to "در حال اجرا",
+        "last_played" to "آخرین بازی: %s", "never_played" to "هنوز بازی نشده", "play_time" to "زمان بازی: %s",
+        "no_instance_title" to "هنوز پروفایلی نداری", "no_instance_text" to "یک پروفایل بساز تا نسخه‌ی ماینکرافت و لودر دلخواهت نصب شود.",
+        "create_instance" to "ساخت پروفایل", "recent" to "پروفایل‌های تو", "playing_as" to "بازی با نام",
+        "no_account" to "اول یک حساب اضافه کن", "dur_hm" to "%d ساعت و %d دقیقه", "dur_m" to "%d دقیقه",
+        // instances
+        "instances_title" to "پروفایل‌ها", "new_instance" to "پروفایل جدید", "import_mrpack" to "وارد کردن فایل mrpack.",
+        "instance_name" to "نام پروفایل", "mc_version" to "نسخه‌ی ماینکرافت", "loader" to "لودر مود", "loader_version" to "نسخه‌ی لودر",
+        "show_snapshots" to "نمایش اسنپ‌شات‌ها", "version_filter" to "فیلتر نسخه‌ها", "latest" to "جدیدترین", "recommended" to "پیشنهادی",
+        "empty_instances" to "اینجا هنوز چیزی نیست. اولین پروفایلت را بساز!", "duplicate" to "کپی‌برداری", "copy_suffix" to "%s (کپی)",
+        "delete_title" to "پروفایل حذف شود؟", "delete_text" to "«%s» با همه‌ی دنیاها، مودها و تنظیماتش برای همیشه حذف می‌شود.",
+        "profile_settings" to "تنظیمات", "launch_failed" to "اجرای بازی ممکن نشد",
+        // instance detail
+        "tab_mods" to "مودها", "tab_resourcepacks" to "ریسورس‌پک‌ها", "tab_shaders" to "شیدرها", "tab_settings" to "تنظیمات",
+        "java_path" to "مسیر جاوا", "java_auto" to "خودکار (پیشنهادی)", "memory_max" to "حداکثر حافظه", "memory_min" to "حافظه‌ی اولیه",
+        "jvm_args" to "آرگومان‌های JVM", "game_args" to "آرگومان‌های بازی", "resolution" to "اندازه‌ی پنجره", "width" to "عرض", "height" to "ارتفاع",
+        "fullscreen" to "تمام‌صفحه", "auto_join" to "ورود خودکار به سرور", "auto_join_hint" to "host یا host:port ـ اختیاری", "notes" to "یادداشت",
+        "check_updates" to "بررسی به‌روزرسانی", "updates_found" to "%d به‌روزرسانی موجود است", "no_updates" to "همه‌چیز به‌روز است",
+        "update_all" to "به‌روزرسانی همه", "add_from_modrinth" to "افزودن از مودرینث", "no_content" to "اینجا هنوز چیزی نصب نشده.",
+        "identify" to "شناسایی فایل‌ها", "identified" to "%d فایل شناسایی شد", "unknown_source" to "منبع نامشخص",
+        "loader_none_hint" to "این پروفایل وانیلاست؛ برای مود باید Fabric، Quilt، Forge یا NeoForge داشته باشی.", "saved" to "ذخیره شد",
+        // browse
+        "browse_title" to "مودرینث", "search_hint" to "جستجوی مود، مادپک، ریسورس‌پک و شیدر…",
+        "type_mod" to "مودها", "type_modpack" to "مادپک‌ها", "type_resourcepack" to "ریسورس‌پک‌ها", "type_shader" to "شیدرها",
+        "sort_by" to "مرتب‌سازی", "sort_relevance" to "مرتبط‌ترین", "sort_downloads" to "بیشترین دانلود", "sort_follows" to "بیشترین دنبال‌کننده", "sort_newest" to "جدیدترین", "sort_updated" to "تازه به‌روز شده",
+        "target_profile" to "نصب در", "load_more" to "نمایش بیشتر", "downloads_count" to "%s دانلود", "by_author" to "از %s",
+        "choose_version" to "انتخاب نسخه", "no_results" to "نتیجه‌ای پیدا نشد", "no_compatible" to "نسخه‌ی سازگار برای %s پیدا نشد",
+        "installed_ok" to "«%s» نصب شد", "installed_with_deps" to "«%s» نصب شد (+%d وابستگی)", "view_on_modrinth" to "مشاهده در مودرینث",
+        "need_profile" to "اول یک پروفایل بساز", "modpack_installed" to "مادپک «%s» آماده است", "any_game_version" to "همه‌ی نسخه‌ها",
+        "pick_version_title" to "انتخاب نسخه‌ی %s", "version_meta" to "%s · %s", "filter_compatible" to "فقط سازگار با این پروفایل",
+        // accounts
+        "accounts_title" to "حساب‌ها", "add_microsoft" to "ورود با مایکروسافت", "add_offline" to "افزودن حساب آفلاین",
+        "offline_name" to "نام بازیکن", "offline_hint" to "۱ تا ۱۶ حرف انگلیسی، عدد یا زیرخط", "account_ms" to "مایکروسافت", "account_offline" to "آفلاین",
+        "ms_not_configured" to "ورود با مایکروسافت به یک Application ID از Azure نیاز دارد که Mojang تأییدش کرده باشد. شناسه‌ی خودت را در تنظیمات وارد کن (docs/SETUP.md) – حساب آفلاین بدون آن هم کار می‌کند.",
+        "ms_title" to "ورود با مایکروسافت", "ms_instructions" to "صفحه‌ی زیر را باز کن و این کد را وارد کن:", "ms_open_page" to "باز کردن صفحه", "ms_waiting" to "منتظر تکمیل ورود در مرورگر هستیم…",
+        "ms_failed" to "ورود ناموفق بود", "ms_success" to "با نام %s وارد شدی", "remove_account" to "حذف حساب", "offline_note" to "حساب آفلاین نمی‌تواند وارد سرورهای آنلاین‌مود شود.",
+        "no_accounts" to "هنوز حسابی اضافه نشده.",
+        // settings
+        "settings_title" to "تنظیمات", "language" to "زبان", "lang_auto" to "پیش‌فرض سیستم", "memory_default" to "حداکثر حافظه‌ی پیش‌فرض",
+        "jvm_default" to "آرگومان‌های JVM پیش‌فرض", "java_override" to "استفاده از این جاوا برای همه‌ی پروفایل‌ها", "threads" to "دانلود هم‌زمان",
+        "mirror" to "منبع دانلود", "mirror_official" to "سرورهای رسمی", "mirror_bmcl" to "آینه‌ی BMCLAPI (برای مناطقی که Mojang کند است)",
+        "proxy" to "پروکسی HTTP", "proxy_host" to "میزبان", "proxy_port" to "پورت", "ms_client_id" to "شناسه‌ی برنامه‌ی مایکروسافت (Azure)",
+        "ms_client_id_hint" to "خالی بگذار تا از شناسه‌ی داخل همین نسخه استفاده شود", "hide_launcher" to "کوچک کردن لانچر هنگام اجرای بازی",
+        "open_console" to "باز کردن کنسول هنگام شروع بازی", "data_dir" to "پوشه‌ی داده‌ها", "about" to "درباره", "version" to "نسخه",
+        "about_text" to "ObsiLauncher یک لانچر غیررسمی است. Minecraft نشان تجاری Mojang AB / Microsoft است و این پروژه هیچ وابستگی‌ای به آن‌ها ندارد.",
+        "apply" to "اعمال", "memory_auto" to "خودکار", "restart_hint" to "تغییر زبان بلافاصله اعمال می‌شود.",
+        // tasks & stages
+        "launching" to "در حال اجرای %s", "creating" to "در حال ساخت %s", "installing" to "در حال نصب %s", "stage_resolving" to "در حال آماده‌سازی…",
+        "stage_libraries" to "دانلود کتابخانه‌ها", "stage_assets" to "دانلود فایل‌های بازی", "stage_java" to "آماده‌سازی جاوا",
+        "stage_loader" to "دانلود نصب‌کننده‌ی لودر", "stage_modpack" to "دانلود مادپک", "stage_modpack_files" to "دانلود فایل‌های مادپک",
+        "stage_download" to "دانلود %s", "task_failed" to "ناموفق", "task_done" to "انجام شد", "task_cancel" to "لغو",
+        // console / crash
+        "console_title" to "کنسول", "console_empty" to "بازی‌ای در حال اجرا نیست. یک پروفایل را اجرا کن تا خروجی‌اش اینجا نمایش داده شود.", "kill" to "بستن اجباری",
+        "crash_title" to "بازی ناگهان متوقف شد", "crash_text" to "«%s» با کد %d بسته شد. آخرین خطوط خروجی:", "view_log" to "باز کردن لاگ کامل",
+        "copy_log" to "کپی لاگ", "game_exited" to "بازی بسته شد", "console_running" to "در حال اجرا · PID %d",
+    )
+}

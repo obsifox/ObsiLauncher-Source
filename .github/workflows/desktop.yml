@@ -1,0 +1,102 @@
+name: Desktop
+
+# ObsiLauncher for Windows + Linux (Compose Multiplatform). Runs only when asked: it never burns minutes on every push.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Upload the packages to the rolling 'nightly' pre-release"
+        type: boolean
+        required: false
+        default: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-24.04
+          - name: Windows
+            os: windows-2022
+    env:
+      # Optional secret (see docs/SETUP.md). Empty = Microsoft sign-in disabled in the build; offline accounts still work.
+      MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          add-job-summary: on-failure
+
+      # jpackage builds the .msi with WiX 3, which is preinstalled on windows-2022 but not always on PATH.
+      - name: WiX Toolset on PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          WIX="/c/Program Files (x86)/WiX Toolset v3.14/bin"
+          if [ ! -f "$WIX/candle.exe" ]; then choco install wixtoolset --no-progress -y || true; fi
+          if [ -f "$WIX/candle.exe" ]; then echo 'C:\Program Files (x86)\WiX Toolset v3.14\bin' >> "$GITHUB_PATH"; else echo "::warning::WiX not found - the .msi will be skipped"; fi
+
+      - name: Unit tests (offline)
+        run: ./gradlew :core:test :desktop:test --no-daemon
+
+      - name: Portable app image
+        run: ./gradlew :desktop:createDistributable --no-daemon
+
+      - name: Installer (.deb on Linux, .msi on Windows)
+        id: installer
+        continue-on-error: true
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ./gradlew :desktop:packageMsi --no-daemon
+          else
+            ./gradlew :desktop:packageDeb --no-daemon
+          fi
+
+      - name: Collect
+        shell: bash
+        run: |
+          VERSION="$(cat VERSION)"
+          mkdir -p dist
+          BIN=desktop/build/compose/binaries/main
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            (cd "$BIN/app" && 7z a -tzip -mx=5 "$GITHUB_WORKSPACE/dist/ObsiLauncher-$VERSION-windows-x64-portable.zip" ObsiLauncher)
+            cp "$BIN"/msi/*.msi "dist/ObsiLauncher-$VERSION-windows-x64.msi" 2>/dev/null || echo "::warning::MSI was not produced (WiX missing?) - the portable zip is still available"
+          else
+            tar -C "$BIN/app" -czf "dist/ObsiLauncher-$VERSION-linux-x64-portable.tar.gz" obsilauncher
+            cp "$BIN"/deb/*.deb "dist/ObsiLauncher-$VERSION-linux-x64.deb" 2>/dev/null || echo "::warning::.deb was not produced"
+          fi
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ObsiLauncher-desktop-${{ matrix.name }}
+          path: dist/*
+          retention-days: 3
+
+      - name: Publish (nightly pre-release, or the tag's release)
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/publish.sh dist/*

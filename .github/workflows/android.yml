@@ -97,12 +97,8 @@ jobs:
           path: dist/*.apk
           retention-days: 3
 
-      - name: Publish to the rolling 'nightly' pre-release
+      - name: Publish (nightly pre-release, or the tag's release)
         if: ${{ github.event_name == 'push' || inputs.publish }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view nightly >/dev/null 2>&1 || gh release create nightly \
-            --prerelease --title "Nightly builds" \
-            --notes "Rolling development builds (Android / Windows / Linux). Replaced on every successful workflow run."
-          gh release upload nightly dist/*.apk --clobber
+        run: bash .github/scripts/publish.sh dist/*.apk
