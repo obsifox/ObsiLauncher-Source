@@ -8,6 +8,16 @@
 
 > مخزن خصوصی · نسخه‌ی `0.1.0` (MVP). این پروژه هیچ وابستگی‌ای به Mojang یا Microsoft ندارد.
 
+## ⬇ دانلود
+
+فایل‌های ساخته‌شده در صفحه‌ی **[Releases ← Nightly builds](https://github.com/obsifox/ObsiLauncher-Source/releases/tag/nightly)** هستند. مخزن خصوصی است؛ باید با حساب مالک (`obsifox`) وارد گیت‌هاب باشی، وگرنه صفحه‌ی ۴۰۴ می‌بینی.
+
+| پلتفرم | فایل |
+|---|---|
+| اندروید ۸+ (arm64) | [ObsiLauncher-0.1.0-zl2.6.1-arm64-v8a.apk](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-zl2.6.1-arm64-v8a.apk) |
+| ویندوز | [نصب‌کننده (.msi)](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-windows-x64.msi) · [قابل‌حمل (.zip)](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-windows-x64-portable.zip) |
+| لینوکس | [.deb](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-linux-x64.deb) · [قابل‌حمل (.tar.gz)](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-linux-x64-portable.tar.gz) |
+
 ## امکانات
 
 - پروفایل‌های جدا (هرکدام مود، دنیا و تنظیمات خودش)

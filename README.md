@@ -6,6 +6,16 @@
 
 > Private repository · version `0.1.0` (MVP). *Not affiliated with Mojang AB or Microsoft.*
 
+## ⬇ Download
+
+The builds are on the **[Releases → Nightly builds](https://github.com/obsifox/ObsiLauncher-Source/releases/tag/nightly)** page. The repository is private, so you must be logged in as the owner (`obsifox`); anyone else gets a 404.
+
+| Platform | Files |
+|---|---|
+| Android 8+ (arm64) | [ObsiLauncher-0.1.0-zl2.6.1-arm64-v8a.apk](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-zl2.6.1-arm64-v8a.apk) |
+| Windows | [installer (.msi)](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-windows-x64.msi) · [portable (.zip)](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-windows-x64-portable.zip) |
+| Linux | [.deb](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-linux-x64.deb) · [portable (.tar.gz)](https://github.com/obsifox/ObsiLauncher-Source/releases/download/nightly/ObsiLauncher-0.1.0-linux-x64-portable.tar.gz) |
+
 ## What you get
 
 | | Android | Windows / Linux |
