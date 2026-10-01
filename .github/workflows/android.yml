@@ -1,0 +1,108 @@
+name: Android
+
+# ObsiLauncher for Android = pinned ZalithLauncher2 + our overlay (see android/README.md).
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: "Target ABI: arm64 | arm | x86_64 | x86 | all"
+        required: false
+        default: "arm64"
+      publish:
+        description: "Upload the APK to the rolling 'nightly' pre-release"
+        type: boolean
+        required: false
+        default: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ARCH: ${{ inputs.arch || 'arm64' }}
+      # Optional secrets (see docs/SETUP.md). Empty value = feature disabled at runtime.
+      OAUTH_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
+      CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          add-job-summary: on-failure
+
+      - name: Fetch pinned upstream and apply the ObsiLauncher overlay
+        run: bash android/scripts/prepare.sh
+
+      - name: Release signing key
+        working-directory: android/.work/upstream
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ]; then
+            echo "$KS_B64" | base64 -d > ZalithLauncher/zalith_launcher.jks
+            echo "STORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=$KS_PASS"   >> "$GITHUB_ENV"
+            echo "Using the project release keystore."
+          else
+            echo "::warning::No ANDROID_KEYSTORE_* secrets set -> using an EPHEMERAL signing key. Builds signed this way cannot be installed over each other."
+            P="$(openssl rand -hex 16)"
+            echo "::add-mask::$P"
+            keytool -genkeypair -keystore ZalithLauncher/zalith_launcher.jks -storetype PKCS12 \
+              -alias obsilauncher -keyalg RSA -keysize 3072 -validity 36500 \
+              -storepass "$P" -keypass "$P" -dname "CN=ObsiLauncher CI, O=ObsiFox Studio"
+            echo "STORE_PASSWORD=$P" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=$P"   >> "$GITHUB_ENV"
+          fi
+
+      - name: Build release APK (${{ env.ARCH }})
+        working-directory: android/.work/upstream
+        run: |
+          VERSION="$(cat "$GITHUB_WORKSPACE/VERSION")"
+          CODE=$((100000 + GITHUB_RUN_NUMBER))
+          chmod +x gradlew
+          ./gradlew ZalithLauncher:assembleRelease -Darch="$ARCH" \
+            -Plauncher_name=ObsiLauncher \
+            "-Plauncher_app_name=Obsi Launcher" \
+            -Plauncher_short_name=OBSI \
+            -Purl_home=https://github.com/obsifox/ObsiLauncher-Source \
+            -Plauncher_version_code="$CODE" \
+            "-Plauncher_version_name=${VERSION}-zl2.6.1" \
+            --stacktrace
+
+      - name: Collect APKs
+        run: |
+          mkdir -p dist
+          cp android/.work/upstream/ZalithLauncher/build/outputs/apk/release/*.apk dist/
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ObsiLauncher-android-${{ env.ARCH }}
+          path: dist/*.apk
+          retention-days: 3
+
+      - name: Publish to the rolling 'nightly' pre-release
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view nightly >/dev/null 2>&1 || gh release create nightly \
+            --prerelease --title "Nightly builds" \
+            --notes "Rolling development builds (Android / Windows / Linux). Replaced on every successful workflow run."
+          gh release upload nightly dist/*.apk --clobber

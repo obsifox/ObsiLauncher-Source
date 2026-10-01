@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="obsi_notice_title">نسخهٔ غیررسمی و تغییرداده‌شده</string>
+    <string name="obsi_notice_body">ObsiLauncher یک نسخهٔ غیررسمی و تغییرداده‌شده از ZalithLauncher 2 است و هیچ ارتباط یا پشتیبانی رسمی از سوی سازندگان اصلی ندارد.</string>
+    <string name="obsi_notice_credit">بر پایهٔ ZalithLauncher2 ساختهٔ MovTery و مشارکت‌کنندگان، تحت مجوز GPL-3.0.</string>
+</resources>
