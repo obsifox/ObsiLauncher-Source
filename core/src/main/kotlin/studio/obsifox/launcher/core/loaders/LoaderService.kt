@@ -59,7 +59,7 @@ class LoaderService(
             LoaderType.FORGE -> forgeVersions(mc)
             LoaderType.NEOFORGE -> neoForgeVersions(mc)
             LoaderType.VANILLA -> emptyList()
-        }
+        }.sortedWith { a, b -> compareVersions(b.version, a.version) } // newest first, whatever order the server used
         cache[key] = list
         return list
     }
@@ -139,7 +139,9 @@ class LoaderService(
 
     private suspend fun installWithInstaller(type: LoaderType, mc: String, lv: String, url: String, progress: ProgressSink): String {
         val expected = if (type == LoaderType.FORGE) "$mc-forge-$lv" else "neoforge-$lv"
-        if (Files.isRegularFile(paths.versionJson(expected))) {
+        // The installer writes the version JSON first and runs its (long) processors afterwards, so the JSON alone proves
+        // nothing: an interrupted run would look installed. We only trust our own completion marker.
+        if (Files.isRegularFile(paths.versionJson(expected)) && Files.isRegularFile(installedMarker(expected))) {
             installer.install(expected, progress)
             return expected
         }
@@ -174,9 +176,12 @@ class LoaderService(
             else -> created.firstOrNull { it.contains(type.name, ignoreCase = true) }
                 ?: throw LauncherException("${type.display} installer finished but no new version was found")
         }
+        Files.writeString(installedMarker(id), "installer finished OK\n")
         installer.install(id, progress)
         return id
     }
+
+    private fun installedMarker(versionId: String): Path = paths.versions.resolve(versionId).resolve(".obsi-installed")
 
     private data class RunResult(val exit: Int, val output: String)
 
@@ -212,6 +217,49 @@ class LoaderService(
     companion object {
         const val FORGE_MAVEN = "https://maven.minecraftforge.net"
         const val NEOFORGE_MAVEN = "https://maven.neoforged.net/releases"
+
+        /**
+         * Semantic-ish version comparison: numeric segments compare as numbers, a release is newer than its own
+         * pre-releases ("0.30.1" > "0.30.1-beta.4"), pre-release identifiers compare piecewise ("beta.9" < "beta.10").
+         */
+        fun compareVersions(a: String, b: String): Int {
+            fun split(v: String): Pair<List<String>, List<String>> {
+                val clean = v.substringBefore('+')
+                val main = clean.substringBefore('-').split('.')
+                val pre = if ('-' in clean) clean.substringAfter('-').split('.', '-') else emptyList()
+                return main to pre
+            }
+            fun cmpPart(x: String, y: String): Int {
+                val xn = x.toLongOrNull()
+                val yn = y.toLongOrNull()
+                return when {
+                    xn != null && yn != null -> xn.compareTo(yn)
+                    xn != null -> -1 // numbers sort before words
+                    yn != null -> 1
+                    else -> x.compareTo(y, ignoreCase = true)
+                }
+            }
+            fun cmpList(x: List<String>, y: List<String>): Int {
+                for (i in 0 until maxOf(x.size, y.size)) {
+                    val c = cmpPart(x.getOrElse(i) { "0" }, y.getOrElse(i) { "0" })
+                    if (c != 0) return c
+                }
+                return 0
+            }
+            val (am, ap) = split(a)
+            val (bm, bp) = split(b)
+            val main = cmpList(am, bm)
+            if (main != 0) return main
+            if (ap.isEmpty() && bp.isEmpty()) return 0
+            if (ap.isEmpty()) return 1
+            if (bp.isEmpty()) return -1
+            // pre-release identifiers: shorter prefix is older, compare piecewise otherwise
+            for (i in 0 until minOf(ap.size, bp.size)) {
+                val c = cmpPart(ap[i], bp[i])
+                if (c != 0) return c
+            }
+            return ap.size.compareTo(bp.size)
+        }
 
         private val versionTag = Regex("<version>([^<]+)</version>")
         fun versionTags(xml: String): List<String> = versionTag.findAll(xml).map { it.groupValues[1].trim() }.toList()

@@ -71,6 +71,15 @@ class OfflineTests {
     }
 
     @Test
+    fun loaderVersionOrdering() {
+        val unsorted = listOf("0.20.0-beta.9", "0.24.0", "0.20.0-beta.10", "0.30.1-beta.4", "0.30.1", "0.9.0", "0.30.0")
+        val sorted = unsorted.sortedWith { a, b -> LoaderService.compareVersions(b, a) }
+        assertEquals(listOf("0.30.1", "0.30.1-beta.4", "0.30.0", "0.24.0", "0.20.0-beta.10", "0.20.0-beta.9", "0.9.0"), sorted)
+        assertEquals(listOf("21.1.252", "21.1.10", "21.1.9"), listOf("21.1.9", "21.1.252", "21.1.10").sortedWith { a, b -> LoaderService.compareVersions(b, a) })
+        assertTrue(LoaderService.compareVersions("47.4.10", "47.4.9") > 0)
+    }
+
+    @Test
     fun mirrorRewrite() {
         assertEquals("https://bmclapi2.bangbang93.com/maven/net/minecraft/x.jar", Mirrors.bmclapi("https://libraries.minecraft.net/net/minecraft/x.jar"))
         assertEquals(null, Mirrors.bmclapi("https://api.modrinth.com/v2/search"))
