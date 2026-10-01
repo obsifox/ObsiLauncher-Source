@@ -51,6 +51,12 @@ class OfflineTests {
     }
 
     @Test
+    fun asciiCheck() {
+        assertTrue(studio.obsifox.launcher.core.util.Platform.isAscii("C:\\Users\\John\\AppData"))
+        assertFalse(studio.obsifox.launcher.core.util.Platform.isAscii("C:\\Users\\\u06A9\u0627\u0631\u0628\u0631\\AppData"))
+    }
+
+    @Test
     fun splitArgsHonoursQuotes() {
         assertEquals(listOf("-Da=1", "-Db=two words", "-X"), LaunchBuilder.splitArgs("-Da=1 \"-Db=two words\"   -X"))
     }
@@ -92,6 +98,24 @@ class OfflineTests {
         assertEquals(3, rv.jvmArgs.size)
         assertEquals(17, rv.javaMajor)
         assertTrue(rv.inherited)
+    }
+
+    @Test
+    fun lwjglEntriesListedSeveralTimesInOneVersionAllSurvive() {
+        // MC 1.14-1.18 style: per module a mac-only 3.2.1 jar, the 3.2.2 jar and an entry with natives. (regression: no LWJGL on the classpath)
+        fun lib(version: String, os: String?, natives: Boolean): String {
+            val rules = if (os == null) "" else if (os == "!osx") ""","rules":[{"action":"allow"},{"action":"disallow","os":{"name":"osx"}}]""" else ""","rules":[{"action":"allow","os":{"name":"osx"}}]"""
+            val nat = if (natives) ""","natives":{"linux":"natives-linux","windows":"natives-windows","osx":"natives-macos"}""" else ""
+            return """{"name":"org.lwjgl:lwjgl-glfw:$version","downloads":{"artifact":{"path":"org/lwjgl/lwjgl-glfw/$version/lwjgl-glfw-$version.jar","url":"u","sha1":"s","size":1}}$rules$nat}"""
+        }
+        val json = """{"id":"1.16.5","type":"release","mainClass":"m","assetIndex":{"id":"1"},"libraries":[
+            ${lib("3.2.1", "osx", false)},${lib("3.2.2", "!osx", false)},${lib("3.2.1", "osx", true)},${lib("3.2.2", "!osx", true)}]}"""
+        val rv = VersionResolver.resolve(listOf(RemoteJson.decodeFromString<VersionJson>(json)))
+        val cp = rv.libraries.mapNotNull { studio.obsifox.launcher.core.mojang.GameInstaller.classpathPath(it) }.distinct()
+        if (studio.obsifox.launcher.core.util.Platform.os != studio.obsifox.launcher.core.util.OsName.MACOS) {
+            assertEquals(listOf("org/lwjgl/lwjgl-glfw/3.2.2/lwjgl-glfw-3.2.2.jar"), cp)
+            assertEquals(2, rv.libraries.size) // artifact entry + natives entry
+        }
     }
 
     @Test

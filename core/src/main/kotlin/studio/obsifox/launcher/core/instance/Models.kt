@@ -67,5 +67,4 @@ data class Settings(
     val openConsoleOnLaunch: Boolean = true,
     val selectedAccountId: String? = null,
     val selectedInstanceId: String? = null,
-    val curseForgeKey: String? = null,
 )

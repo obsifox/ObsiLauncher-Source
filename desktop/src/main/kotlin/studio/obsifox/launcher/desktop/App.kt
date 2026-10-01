@@ -124,8 +124,14 @@ private fun Shell(app: AppController) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(tf("crash_text", c.instance.name, c.exitCode), color = Obsi.textDim)
-                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF0A0712)).padding(10.dp)) {
-                        Text(c.tail.takeLast(12).joinToString("\n"), color = Obsi.red, fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 12)
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF0A0712)).padding(10.dp)) {
+                        c.tail.takeLast(10).forEach { line ->
+                            val bad = "/ERROR]" in line || "Exception" in line || "Caused by" in line || "crashed" in line
+                            Text(
+                                line, color = if (bad) Obsi.red else Color(0xFFD6D0E8), fontSize = 11.sp, lineHeight = 15.sp, maxLines = 2,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             },

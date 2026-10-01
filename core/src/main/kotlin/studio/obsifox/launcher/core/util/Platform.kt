@@ -37,15 +37,27 @@ object Platform {
         OsName.MACOS -> when (arch) { "arm64" -> "mac-os-arm64"; "x86_64" -> "mac-os"; else -> null }
     }
 
+    /**
+     * Where the launcher keeps its data. Override with the OBSI_HOME environment variable.
+     * On Windows a profile folder with non-ASCII letters (e.g. a Persian user name) breaks java.library.path / native
+     * loading in many JVM + LWJGL versions, so in that case we use the always-ASCII public folder instead.
+     */
     fun defaultDataDir(): Path {
         System.getenv("OBSI_HOME")?.takeIf { it.isNotBlank() }?.let { return Paths.get(it) }
         val home = System.getProperty("user.home")
-        return when (os) {
+        val base = when (os) {
             OsName.WINDOWS -> Paths.get(System.getenv("APPDATA")?.takeIf { it.isNotBlank() } ?: "$home/AppData/Roaming", "ObsiLauncher")
             OsName.MACOS -> Paths.get(home, "Library", "Application Support", "ObsiLauncher")
             OsName.LINUX -> Paths.get(System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() } ?: "$home/.local/share", "ObsiLauncher")
         }
+        if (os == OsName.WINDOWS && !isAscii(base.toString())) {
+            val pub = System.getenv("PUBLIC")?.takeIf { it.isNotBlank() && isAscii(it) } ?: "C:\\Users\\Public"
+            return Paths.get(pub, "ObsiLauncher")
+        }
+        return base
     }
+
+    fun isAscii(s: String): Boolean = s.all { it.code < 128 }
 
     /** Total physical memory in MB (best effort, 0 when unknown). */
     fun totalMemoryMb(): Int = try {

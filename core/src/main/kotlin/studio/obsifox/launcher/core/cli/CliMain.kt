@@ -93,18 +93,26 @@ private suspend fun cli(args: Array<String>) {
                 println(prepared.command.redacted(emptyList()))
             } else {
                 val session = core.start(prepared)
+                val until = args.firstOrNull { it.startsWith("--until=") }?.removePrefix("--until=")
+                val timeoutMs = (System.getenv("OBSI_CLI_TIMEOUT")?.toLongOrNull() ?: 150L) * 1000
                 var printed = 0
-                val code = withTimeoutOrNull(150_000) {
-                    while (session.running.value) {
+                var reached = false
+                val code = withTimeoutOrNull(timeoutMs) {
+                    while (session.running.value && !reached) {
                         val lines = session.lines.value
-                        while (printed < lines.size) println(lines[printed++])
-                        kotlinx.coroutines.delay(300)
+                        while (printed < lines.size) {
+                            val l = lines[printed++]
+                            println(l)
+                            if (until != null && l.contains(until)) reached = true
+                        }
+                        if (!reached) kotlinx.coroutines.delay(300)
                     }
-                    session.exitCode.await()
+                    if (reached) 0 else session.exitCode.await()
                 }
                 val lines = session.lines.value
                 while (printed < lines.size) println(lines[printed++])
-                if (code == null) { session.stopAndWait(); println("TIMEOUT: game still running after 150 s"); exitProcess(3) }
+                if (reached) { session.stopAndWait(); println("REACHED: $until"); return }
+                if (code == null) { session.stopAndWait(); println("TIMEOUT: game still running after ${timeoutMs / 1000} s"); exitProcess(3) }
                 println("EXIT $code")
             }
         }

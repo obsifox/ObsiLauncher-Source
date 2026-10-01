@@ -43,14 +43,26 @@ object VersionResolver {
             ?: AssetIndexRef(id = leafFirst.firstNotNullOfOrNull { it.assets } ?: "legacy")
         val java = leafFirst.firstNotNullOfOrNull { it.javaVersion }
 
-        val seen = HashSet<String>()
-        val libs = ArrayList<Library>()
-        for (v in leafFirst) for (l in v.libraries) if (seen.add(Maven.key(l.name))) libs += l
-        // keep the original order within the chain: parent libs first is what the official launcher does for the classpath,
-        // but child-first de-duplication already made the child's entries win. Re-sort so parents come first again.
-        val order = chain.flatMap { v -> v.libraries.map { Maven.key(it.name) } }.distinct()
-        val byKey = libs.associateBy { Maven.key(it.name) }
-        val ordered = order.mapNotNull { byKey[it] }
+        // Libraries: evaluate OS rules first, then let a child version override the parent's library with the same
+        // coordinates (e.g. a loader shipping a newer guava). Entries of the SAME version file are never merged:
+        // Mojang lists LWJGL 3.2.x several times per module (a mac-only 3.2.1 jar, the 3.2.2 jar, and one entry
+        // carrying the natives), and they all have to survive.
+        val overridden = HashSet<String>()
+        val levels = ArrayList<List<Library>>()
+        for (v in leafFirst) {
+            val level = ArrayList<Library>()
+            val keys = HashSet<String>()
+            for (l in v.libraries) {
+                if (!Rules.allowed(l.rules)) continue
+                val k = libraryKey(l)
+                if (k in overridden) continue
+                level += l
+                keys += k
+            }
+            overridden += keys
+            levels += level
+        }
+        val ordered = levels.asReversed().flatten() // parents first, like the official launcher
 
         return ResolvedVersion(
             id = leaf.id,
@@ -69,4 +81,7 @@ object VersionResolver {
             chain = chain,
         )
     }
+
+    /** Identity of a library for the child-overrides-parent rule: group:artifact[:classifier], natives entries kept apart. */
+    fun libraryKey(l: Library): String = Maven.key(l.name) + if (l.natives != null) "#natives" else ""
 }

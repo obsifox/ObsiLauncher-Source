@@ -24,6 +24,10 @@ class GameSession(
     val startedAt: Long = System.currentTimeMillis()
     val pid: Long = process.pid()
 
+    /** True once the user (or the launcher) asked the game to stop - its non-zero exit code is then not a crash. */
+    @Volatile var stopRequested: Boolean = false
+        private set
+
     private val buffer = ArrayDeque<String>()
     private val lock = Any()
     @Volatile private var dirty = false
@@ -83,6 +87,7 @@ class GameSession(
 
     /** Polite termination first, then force-kill after 4 seconds. */
     fun stop() {
+        stopRequested = true
         process.destroy()
         Thread {
             try {
@@ -93,6 +98,7 @@ class GameSession(
 
     /** Blocking variant for CLIs/tests: SIGTERM, wait [graceMs], then SIGKILL. */
     fun stopAndWait(graceMs: Long = 4000) {
+        stopRequested = true
         process.destroy()
         if (!process.waitFor(graceMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
             process.destroyForcibly()

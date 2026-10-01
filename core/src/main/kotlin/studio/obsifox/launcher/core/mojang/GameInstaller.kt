@@ -174,7 +174,7 @@ class GameInstaller(
     }
 
     /** Classpath entries (libraries valid for this OS, minus natives-only libraries), in order. */
-    fun classpath(rv: ResolvedVersion): List<Path> = rv.libraries.mapNotNull { lib -> classpathPath(lib)?.let { paths.libraries.resolve(it) } }
+    fun classpath(rv: ResolvedVersion): List<Path> = rv.libraries.mapNotNull { lib -> classpathPath(lib) }.distinct().map { paths.libraries.resolve(it) }
 
     private fun extractNatives(rv: ResolvedVersion) {
         val jars = ArrayList<Pair<Path, List<String>>>()

@@ -83,7 +83,7 @@ jobs:
             (cd "$BIN/app" && 7z a -tzip -mx=5 "$GITHUB_WORKSPACE/dist/ObsiLauncher-$VERSION-windows-x64-portable.zip" ObsiLauncher)
             cp "$BIN"/msi/*.msi "dist/ObsiLauncher-$VERSION-windows-x64.msi" 2>/dev/null || echo "::warning::MSI was not produced (WiX missing?) - the portable zip is still available"
           else
-            tar -C "$BIN/app" -czf "dist/ObsiLauncher-$VERSION-linux-x64-portable.tar.gz" obsilauncher
+            tar -C "$BIN/app" -czf "dist/ObsiLauncher-$VERSION-linux-x64-portable.tar.gz" ObsiLauncher
             cp "$BIN"/deb/*.deb "dist/ObsiLauncher-$VERSION-linux-x64.deb" 2>/dev/null || echo "::warning::.deb was not produced"
           fi
           ls -lh dist

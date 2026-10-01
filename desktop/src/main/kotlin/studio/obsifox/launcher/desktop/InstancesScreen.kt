@@ -168,6 +168,8 @@ fun NewInstanceDialog(onDismiss: () -> Unit) {
         LabeledField(t("version_filter"), filter, { filter = it })
         if (manifest == null) {
             Dim(t("loading"))
+        } else if (manifest!!.isEmpty()) {
+            Text(t("error"), color = Obsi.red)
         } else {
             LazyColumn(Modifier.height(150.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Obsi.bg1)) {
                 items(visible.take(200), key = { it.id }) { v ->

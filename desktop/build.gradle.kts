@@ -56,7 +56,7 @@ compose.desktop {
             vendor = "ObsiFox Studio"
             copyright = "© ObsiFox Studio"
             // modules the packaged runtime needs (see `./gradlew :desktop:suggestRuntimeModules`)
-            modules("java.net.http", "java.management", "jdk.unsupported", "java.naming", "java.sql", "jdk.crypto.ec", "jdk.accessibility")
+            modules("java.instrument", "java.management", "java.net.http", "jdk.unsupported", "java.naming", "java.sql", "jdk.crypto.ec", "jdk.accessibility")
 
             windows {
                 iconFile.set(project.file("packaging/icon.ico"))

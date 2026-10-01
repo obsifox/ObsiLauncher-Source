@@ -141,6 +141,9 @@ class AppController(val core: LauncherCore, val build: BuildInfo) {
 
     fun isRunning(instanceId: String) = sessions.value[instanceId]?.running?.value == true
 
+    /** Profiles that are being prepared right now (downloads) - prevents a second click from launching twice. */
+    private val launching = ConcurrentHashMap.newKeySet<String>()
+
     fun play(instance: Instance) {
         if (sessions.value.containsKey(instance.id)) { go(Screen.Console); return }
         val account = selectedAccount()
@@ -149,19 +152,24 @@ class AppController(val core: LauncherCore, val build: BuildInfo) {
             go(Screen.Accounts)
             return
         }
+        if (!launching.add(instance.id)) return
         selectInstance(instance.id)
         task<Unit>(s.fmt("launching", instance.name)) { progress ->
-            progress(ProgressUpdate("Resolving"))
-            val prepared = core.prepare(instance.id, account, progress)
-            val session = core.start(prepared)
-            sessions.update { it + (instance.id to session) }
-            if (core.settings.value.openConsoleOnLaunch) go(Screen.Console)
-            scope.launch {
-                val code = session.exitCode.await()
-                sessions.update { it - instance.id }
-                if (code != 0) {
-                    crash.value = CrashInfo(instance, code, session.lines.value.takeLast(40), core.paths.logs.resolve("${instance.id}-latest.log"))
+            try {
+                progress(ProgressUpdate("Resolving"))
+                val prepared = core.prepare(instance.id, account, progress)
+                val session = core.start(prepared)
+                sessions.update { it + (instance.id to session) }
+                if (core.settings.value.openConsoleOnLaunch) go(Screen.Console)
+                scope.launch {
+                    val code = session.exitCode.await()
+                    sessions.update { it - instance.id }
+                    if (code != 0 && !session.stopRequested) {
+                        crash.value = CrashInfo(instance, code, session.lines.value.takeLast(40), core.paths.logs.resolve("${instance.id}-latest.log"))
+                    }
                 }
+            } finally {
+                launching.remove(instance.id)
             }
         }
     }
