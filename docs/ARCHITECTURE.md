@@ -63,6 +63,10 @@ upstream's own Gradle project (`-Plauncher_name=…`) and signs with our keystor
 Workflows are `workflow_dispatch` + tag `v*` only (private-repo minutes are limited). Artifacts expire after 3 days; durable outputs go
 to the `nightly` pre-release (or the tag's release) through `.github/scripts/publish.sh`.
 
+The Linux `.deb` from jpackage is post-processed by `.github/scripts/fix-deb.sh` (older-distro library names in `Depends`, a menu registration
+that falls back to a plain `.desktop` file on systems without an xdg menu directory, a clean `Maintainer`, xz compression) and CI then installs and
+removes it on the runner; a package that fails that check is dropped from `dist/` and the job fails, so it is never published.
+
 ## Robustness notes (learned the hard way)
 
 * Mojang lists some libraries several times per version (LWJGL 3.2.x: a mac-only jar, the real jar, an entry carrying natives). Libraries are filtered by OS rules *first*, and only a **child** version may override its parent's library - never entries of the same file.

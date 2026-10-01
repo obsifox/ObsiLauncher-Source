@@ -74,6 +74,7 @@ The Android APK is built in CI (it needs the Android SDK/NDK and ~1 GB of upstre
 
 "Started" = the game reached its own window / OpenGL initialisation (on a machine with a display it creates textures and shows the title screen).
 The packaged Linux app was also driven through its GUI: *Play → live console → Minecraft title screen → Kill*.
+The published `.deb` was installed, started and removed again on Debian 13 (also on a headless box without a desktop menu directory); CI repeats the install/remove check on every build.
 Modrinth search, version pick, dependency install (Iris → Sodium), update check and `.mrpack` import were run against the live API.
 Offline unit tests cover resolver, rules, launch command, UUIDs, log parsing, version ordering and EN/FA string completeness.
 
