@@ -20,6 +20,7 @@
 ## دانلود
 
 فایل‌های ساخته‌شده در [Nightly](../../releases/tag/nightly) هستند: `…arm64-v8a.apk` (اندروید)، `…windows-x64.msi` یا `…portable.zip` (ویندوز)، `…linux-x64.deb` یا `…portable.tar.gz` (لینوکس).
+نصب در لینوکس: `sudo apt install ./ObsiLauncher-<ver>-linux-x64.deb` (روی Debian 13 آزمایش شده؛ روی Debian 12 / Ubuntu 22.04 آزمایش نشده) یا آرشیو portable را باز کنید و `ObsiLauncher/bin/ObsiLauncher` را اجرا کنید. در ویندوز فایل `.msi` را اجرا کنید یا آرشیو portable را باز کرده و `ObsiLauncher.exe` را بزنید.
 برای ساخت نسخه‌ی تازه: **Actions ← Android / Desktop ← Run workflow**.
 
 ## نکات مهم

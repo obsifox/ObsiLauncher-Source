@@ -69,7 +69,7 @@ compose.desktop {
             linux {
                 iconFile.set(project.file("packaging/icon.png"))
                 packageName = "obsilauncher"
-                debMaintainer = "ObsiFox Studio <dev@obsifox.invalid>"
+                debMaintainer = "dev@obsifox.invalid"
                 menuGroup = "Game"
                 appCategory = "Game"
                 shortcut = true

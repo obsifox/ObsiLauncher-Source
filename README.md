@@ -34,6 +34,8 @@ CI builds are published in the **[nightly pre-release](../../releases/tag/nightl
 * `ObsiLauncher-<ver>-windows-x64.msi` or `…-portable.zip`
 * `ObsiLauncher-<ver>-linux-x64.deb` or `…-portable.tar.gz`
 
+Install on Linux with `sudo apt install ./ObsiLauncher-<ver>-linux-x64.deb` (tested on Debian 13; the dependency list also accepts the older library names of Debian 12 / Ubuntu 22.04, which were not tested), or unpack the portable archive anywhere and run `ObsiLauncher/bin/ObsiLauncher`. On Windows run the `.msi`, or unzip the portable archive and start `ObsiLauncher.exe`.
+
 Run **Actions → Android / Desktop → Run workflow** to produce fresh ones. See [docs/SETUP.md](docs/SETUP.md) for the optional secrets (Microsoft sign-in needs your own Azure app ID).
 
 ## Repository layout

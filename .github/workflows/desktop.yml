@@ -84,9 +84,32 @@ jobs:
             cp "$BIN"/msi/*.msi "dist/ObsiLauncher-$VERSION-windows-x64.msi" 2>/dev/null || echo "::warning::MSI was not produced (WiX missing?) - the portable zip is still available"
           else
             tar -C "$BIN/app" -czf "dist/ObsiLauncher-$VERSION-linux-x64-portable.tar.gz" ObsiLauncher
-            cp "$BIN"/deb/*.deb "dist/ObsiLauncher-$VERSION-linux-x64.deb" 2>/dev/null || echo "::warning::.deb was not produced"
+            if cp "$BIN"/deb/*.deb "dist/ObsiLauncher-$VERSION-linux-x64.deb" 2>/dev/null; then
+              bash .github/scripts/fix-deb.sh "dist/ObsiLauncher-$VERSION-linux-x64.deb" \
+                || echo "::warning::.deb post-processing failed - shipping the plain jpackage output"
+            else
+              echo "::warning::.deb was not produced"
+            fi
           fi
           ls -lh dist
+
+      # A runner has no desktop menu directory, which is exactly the case the .deb has to survive.
+      # A package that fails here is dropped from dist/ (and the job is failed at the end), so it never ships.
+      - name: Check that the .deb installs and removes cleanly (Linux)
+        id: debcheck
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        shell: bash
+        run: |
+          deb="$(ls dist/*.deb 2>/dev/null | head -n1 || true)"
+          [ -n "$deb" ] || { echo "::warning::no .deb to check"; exit 0; }
+          trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "::error::the .deb failed its install/remove check and is not published"; rm -f "$deb"; fi' EXIT
+          sudo apt-get install -y --no-install-recommends "./$deb"
+          test -x /opt/obsilauncher/bin/ObsiLauncher
+          dpkg -s obsilauncher | grep -q '^Status: install ok installed'
+          sudo apt-get remove -y obsilauncher
+          test ! -e /opt/obsilauncher
+          echo ".deb installs and removes cleanly"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -100,3 +123,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash .github/scripts/publish.sh dist/*
+
+      - name: Fail the job if the .deb check failed
+        if: ${{ always() && steps.debcheck.outcome == 'failure' }}
+        shell: bash
+        run: exit 1
