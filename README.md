@@ -19,6 +19,13 @@
 | UI languages | EN + notice card in FA | **EN + FA (RTL, Vazirmatn font)** |
 | Extras | renderers, controls, … (upstream) | live game console, crash dialog, BMCLAPI mirror + proxy, per-profile memory/JVM args/resolution/auto-join |
 
+## Screenshots
+
+| English (LTR) | فارسی (RTL) |
+|---|---|
+| ![Home](docs/assets/screens/home-en.png) | ![خانه](docs/assets/screens/home-fa.png) |
+| ![Modrinth](docs/assets/screens/modrinth-en.png) | ![مودها](docs/assets/screens/profile-mods-fa.png) |
+
 ## Download
 
 CI builds are published in the **[nightly pre-release](../../releases/tag/nightly)** (private repo → you must be logged in):
@@ -52,9 +59,27 @@ Architecture notes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Licensing: [NO
 ```
 The Android APK is built in CI (it needs the Android SDK/NDK and ~1 GB of upstream runtimes): `bash android/scripts/prepare.sh && cd android/.work/upstream && ./gradlew ZalithLauncher:assembleRelease -Darch=arm64`.
 
-## Status & known limits
+## Status & what has actually been tested
 
-* Microsoft login is **disabled until you add `MS_CLIENT_ID`** and Mojang approves it ([docs/SETUP.md](docs/SETUP.md)). Offline accounts work now.
-* Desktop game launches were verified headlessly (vanilla, Fabric, Quilt, NeoForge, Forge start up to window creation); the UI has not been exercised on a real Windows machine yet.
-* Android builds are CI-only; the APK installs on a real device but was not run in this environment.
-* Not yet: CurseForge on desktop, skin management, server list, instance export, macOS packaging.
+**Desktop engine (Linux, CI + a virtual display).** Real installs *and* real game start-ups were run through the same code the GUI uses:
+
+| Loader | Minecraft versions started |
+|---|---|
+| Vanilla | 1.7.10, 1.8.9, 1.13.2, 1.17.1, 1.18.2, 1.19.4, 1.21.1 |
+| Fabric | 1.16.5, 1.19.4, 1.21.1, 26.2 (a 49-mod Modrinth modpack installed from `.mrpack`) |
+| Forge | 1.12.2, 1.16.5, 1.18.2, 1.20.1 |
+| NeoForge | 1.20.4, 1.21.1 |
+
+"Started" = the game reached its own window / OpenGL initialisation (on a machine with a display it creates textures and shows the title screen).
+The packaged Linux app was also driven through its GUI: *Play → live console → Minecraft title screen → Kill*.
+Modrinth search, version pick, dependency install (Iris → Sodium), update check and `.mrpack` import were run against the live API.
+Offline unit tests cover resolver, rules, launch command, UUIDs, log parsing, version ordering and EN/FA string completeness.
+
+**Not verified / limits**
+
+* **Microsoft login is disabled until you add `MS_CLIENT_ID` and Mojang approves it** ([docs/SETUP.md](docs/SETUP.md)); the device-code request was checked against Microsoft (errors are reported correctly) but a real sign-in could not be tested. Offline accounts work now.
+* **Windows** packages (`.msi`, portable `.zip`) are built by CI but were not run on a real Windows PC. The `.msi` is unsigned, so SmartScreen will warn.
+* **Android**: the APK builds, is correctly signed and its manifest/strings were inspected, but it was not installed on a device here.
+* **Quilt**: installs and starts its loader, but its first-run remap is so slow on the 2-core test box that a full start-up was not confirmed.
+* Account tokens are stored in `accounts.json` (owner-only permissions on Linux) like most launchers; OS keychain integration is future work.
+* Not yet: CurseForge on desktop, skins, server list, instance export, macOS packaging, a full Persian translation of the Android app.

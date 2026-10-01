@@ -63,6 +63,14 @@ upstream's own Gradle project (`-Plauncher_name=…`) and signs with our keystor
 Workflows are `workflow_dispatch` + tag `v*` only (private-repo minutes are limited). Artifacts expire after 3 days; durable outputs go
 to the `nightly` pre-release (or the tag's release) through `.github/scripts/publish.sh`.
 
+## Robustness notes (learned the hard way)
+
+* Mojang lists some libraries several times per version (LWJGL 3.2.x: a mac-only jar, the real jar, an entry carrying natives). Libraries are filtered by OS rules *first*, and only a **child** version may override its parent's library - never entries of the same file.
+* Forge/NeoForge installers write the version JSON before their long processors finish, so an installation counts as complete only when our `.obsi-installed` marker exists.
+* Loader lists are sorted semantically (Quilt's API order is not by version).
+* On Windows a profile path with non-ASCII letters (e.g. a Persian user name) breaks native loading in many JVM/LWJGL combinations, so the data folder then falls back to `C:\Users\Public\ObsiLauncher`.
+* A game stopped from the launcher is not reported as a crash; any other non-zero exit shows the crash dialog with the log tail.
+
 ## Testing
 
 * `core:test` – offline unit tests (rules, resolver, launch command, offline UUID, log parsing, NeoForge version math).
