@@ -52,8 +52,8 @@ Already generated and uploaded. Facts worth knowing:
 
 ## 3. Running the workflows
 
-Actions → pick **Android** or **Desktop** → *Run workflow*. Nothing runs automatically on push, so a private repo's free minutes (2000/month; Windows counts double) are never spent behind your back.
-Outputs land in the rolling **nightly** pre-release (and as 3-day workflow artifacts). Pushing a tag `v0.2.0` builds everything and attaches it to a release called `v0.2.0`.
+Actions → pick **Android** or **Desktop** → *Run workflow*. Nothing runs automatically on push, so builds only happen when you ask for them (a private repo has 2000 free minutes/month and Windows counts double; a public repo's minutes are free).
+Outputs land in the rolling **nightly** release (and as 3-day workflow artifacts). Pushing a tag `v0.2.0` builds everything and attaches it to a release called `v0.2.0`.
 
 ## 4. Local development
 

@@ -4,11 +4,11 @@
 <p align="center">A multi-profile launcher for <b>Minecraft: Java Edition</b> with built-in Modrinth, for <b>Android</b>, <b>Windows</b> and <b>Linux</b>.</p>
 <p align="center"><a href="README.fa.md">فارسی</a></p>
 
-> Private repository · version `0.1.0` (MVP). *Not affiliated with Mojang AB or Microsoft.*
+> Public repository · version `0.1.0` (MVP). *Not affiliated with Mojang AB or Microsoft.*
 
 ## ⬇ Download
 
-The builds are on the **[Releases → Nightly builds](https://github.com/obsifox/ObsiLauncher-Source/releases/tag/nightly)** page. The repository is private, so you must be logged in as the owner (`obsifox`); anyone else gets a 404.
+The builds are on the **[Releases → Nightly builds](https://github.com/obsifox/ObsiLauncher-Source/releases/tag/nightly)** page. The repository is public, so no login is needed.
 
 | Platform | Files |
 |---|---|
@@ -38,7 +38,7 @@ The builds are on the **[Releases → Nightly builds](https://github.com/obsifox
 
 ## Download
 
-CI builds are published in the **[nightly pre-release](../../releases/tag/nightly)** (private repo → you must be logged in):
+CI builds are published in the **[nightly release](../../releases/tag/nightly)**:
 
 * `ObsiLauncher-<ver>-zl2.6.1-arm64-v8a.apk` – Android 8.0+ (arm64)
 * `ObsiLauncher-<ver>-windows-x64.msi` or `…-portable.zip`

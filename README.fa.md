@@ -6,11 +6,11 @@
 
 لانچر چندپروفایلی **ماینکرافت جاوا** با اتصال مستقیم به **Modrinth** برای **اندروید، ویندوز و لینوکس**.
 
-> مخزن خصوصی · نسخه‌ی `0.1.0` (MVP). این پروژه هیچ وابستگی‌ای به Mojang یا Microsoft ندارد.
+> مخزن عمومی · نسخه‌ی `0.1.0` (MVP). این پروژه هیچ وابستگی‌ای به Mojang یا Microsoft ندارد.
 
 ## ⬇ دانلود
 
-فایل‌های ساخته‌شده در صفحه‌ی **[Releases ← Nightly builds](https://github.com/obsifox/ObsiLauncher-Source/releases/tag/nightly)** هستند. مخزن خصوصی است؛ باید با حساب مالک (`obsifox`) وارد گیت‌هاب باشی، وگرنه صفحه‌ی ۴۰۴ می‌بینی.
+فایل‌های ساخته‌شده در صفحه‌ی **[Releases ← Nightly builds](https://github.com/obsifox/ObsiLauncher-Source/releases/tag/nightly)** هستند. مخزن عمومی است؛ برای دانلود نیازی به لاگین نیست.
 
 | پلتفرم | فایل |
 |---|---|

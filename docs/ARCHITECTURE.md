@@ -60,8 +60,8 @@ upstream's own Gradle project (`-Plauncher_name=…`) and signs with our keystor
 
 ## CI
 
-Workflows are `workflow_dispatch` + tag `v*` only (private-repo minutes are limited). Artifacts expire after 3 days; durable outputs go
-to the `nightly` pre-release (or the tag's release) through `.github/scripts/publish.sh`.
+Workflows are `workflow_dispatch` + tag `v*` only (builds run only when you ask for them; a private repo's free minutes are limited). Artifacts expire after 3 days; durable outputs go
+to the rolling `nightly` release (or the tag's release) through `.github/scripts/publish.sh`.
 
 The Linux `.deb` from jpackage is post-processed by `.github/scripts/fix-deb.sh` (older-distro library names in `Depends`, a menu registration
 that falls back to a plain `.desktop` file on systems without an xdg menu directory, a clean `Maintainer`, xz compression) and CI then installs and
