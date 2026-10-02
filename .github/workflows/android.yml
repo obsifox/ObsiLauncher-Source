@@ -31,8 +31,6 @@ jobs:
     env:
       ARCH: ${{ inputs.arch || 'arm64' }}
       # Optional secrets (see docs/SETUP.md). Empty value = feature disabled at runtime.
-      OAUTH_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
-      CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
     steps:
       - uses: actions/checkout@v6
 

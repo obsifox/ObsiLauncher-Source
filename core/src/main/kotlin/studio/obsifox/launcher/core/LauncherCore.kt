@@ -23,6 +23,8 @@ import studio.obsifox.launcher.core.mojang.GameInstaller
 import studio.obsifox.launcher.core.mojang.MojangApi
 import studio.obsifox.launcher.core.net.Downloader
 import studio.obsifox.launcher.core.net.Http
+import studio.obsifox.launcher.core.update.UpdateService
+import studio.obsifox.launcher.core.wallpaper.WallpaperStore
 import studio.obsifox.launcher.core.util.LauncherException
 import studio.obsifox.launcher.core.util.Platform
 import studio.obsifox.launcher.core.util.ProgressSink
@@ -33,13 +35,10 @@ class PreparedLaunch(val command: LaunchCommand, val account: Account, val insta
 
 /**
  * Wires every service together. UI code only talks to this class (plus the stores' StateFlows).
- *
- * @param defaultMsClientId Azure application id baked into the build (CI secret MS_CLIENT_ID); users can override it in Settings.
  */
 class LauncherCore(
     val paths: LauncherPaths = LauncherPaths(Platform.defaultDataDir()),
     val version: String = "dev",
-    private val defaultMsClientId: String? = null,
     val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     init { paths.ensure() }
@@ -53,13 +52,12 @@ class LauncherCore(
     val loaders = LoaderService(http, paths, mojang, java, installer, downloader)
     val instances = InstanceStore(paths)
     val accounts = AccountStore(paths)
-    val auth = AuthService(http, accounts) { settings.value.msClientId?.takeIf { it.isNotBlank() } ?: defaultMsClientId }
+    val auth = AuthService(accounts)
     val modrinth = ModrinthApi(http)
     val content = ContentManager(paths, modrinth, downloader)
     val modpacks = ModpackInstaller(paths, modrinth, downloader, loaders, instances)
-
-    val microsoftConfigured: Boolean
-        get() = !(settings.value.msClientId?.takeIf { it.isNotBlank() } ?: defaultMsClientId).isNullOrBlank()
+    val wallpapers = WallpaperStore(http, paths) { mojang.manifest().versions }
+    val updates = UpdateService(http)
 
     init { applySettings() }
 
@@ -70,6 +68,15 @@ class LauncherCore(
         downloader.parallelism = s.downloadThreads
     }
 
+    /**
+     * Fetches the official wallpaper of [mcVersion] in the background, next to the game files (best effort: a failure
+     * never blocks installing or launching). Skipped when the user picked a custom wallpaper.
+     */
+    fun prefetchWallpaper(mcVersion: String) {
+        if (settings.value.wallpaperMode == "custom") return
+        scope.launch { runCatching { wallpapers.ensureForVersion(mcVersion) } }
+    }
+
     suspend fun createInstance(name: String, mc: String, loader: LoaderType, loaderVersion: String?, progress: ProgressSink): Instance {
         val clean = name.trim().ifBlank { throw LauncherException("Instance name is empty") }
         val installed = loaders.install(loader, mc, loaderVersion, progress)
@@ -78,12 +85,14 @@ class LauncherCore(
             loaderVersion = installed.loaderVersion, launchVersionId = installed.versionId,
         )
         instances.save(instance)
+        prefetchWallpaper(mc)
         return instance
     }
 
     /** Makes sure everything is downloaded and builds the exact command line. Safe to call before every launch. */
     suspend fun prepare(instanceId: String, account: Account, progress: ProgressSink): PreparedLaunch {
         var instance = instances.get(instanceId) ?: throw LauncherException("Instance not found")
+        prefetchWallpaper(instance.mcVersion) // the artwork comes down next to the game files
         if (instance.launchVersionId == null) {
             val installed = loaders.install(instance.loader, instance.mcVersion, instance.loaderVersion, progress)
             instance = instance.copy(launchVersionId = installed.versionId, loaderVersion = installed.loaderVersion ?: instance.loaderVersion)
@@ -97,7 +106,7 @@ class LauncherCore(
         val gameDir = paths.gameDir(instance.id)
         Files.createDirectories(gameDir)
         installer.mapAssetsToResources(rv, gameDir)
-        val fresh = auth.ensureFresh(account)
+        val fresh = account
         val command = LaunchBuilder.build(rv, paths, installer.classpath(rv), instance, fresh, s, javaExe, version)
         return PreparedLaunch(command, fresh, instance)
     }

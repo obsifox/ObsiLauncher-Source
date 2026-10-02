@@ -4,7 +4,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import studio.obsifox.launcher.core.auth.Account
-import studio.obsifox.launcher.core.auth.AccountType
 import studio.obsifox.launcher.core.instance.Instance
 import studio.obsifox.launcher.core.instance.Settings
 import studio.obsifox.launcher.core.launch.LaunchBuilder
@@ -159,7 +158,7 @@ class OfflineTests {
         )
         val rv = VersionResolver.resolve(listOf(v))
         val inst = Instance(id = "t", name = "T", mcVersion = "1.21.1", width = 1280, height = 720, maxMemoryMb = 3000, jvmArgs = "-Dfoo=bar")
-        val acc = Account("offline-1", AccountType.OFFLINE, "Steve", offlineUuid("Steve").undashed())
+        val acc = Account("offline-1", "Steve", offlineUuid("Steve").undashed())
         val cmd = LaunchBuilder.build(rv, paths, emptyList(), inst, acc, Settings(), Paths.get("/usr/bin/java"), "0.0.0")
         val a = cmd.args
         assertTrue("-Xmx3000M" in a)

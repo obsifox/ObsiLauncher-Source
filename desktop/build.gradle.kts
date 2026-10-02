@@ -25,19 +25,17 @@ tasks.test {
     maxHeapSize = "512m"
 }
 
-// build.properties: version + the Azure client id injected by CI (secret MS_CLIENT_ID; empty = Microsoft login disabled)
+// build.properties: version + CI commit, embedded for the update check
 val generateBuildInfo by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/buildinfo")
-    val msClientId = providers.environmentVariable("MS_CLIENT_ID").orElse("")
     val commit = providers.environmentVariable("GITHUB_SHA").orElse("dev")
     inputs.property("version", appVersion)
-    inputs.property("msClientId", msClientId)
     inputs.property("commit", commit)
     outputs.dir(outDir)
     doLast {
         val f = outDir.get().file("obsi-build.properties").asFile
         f.parentFile.mkdirs()
-        f.writeText("version=$appVersion\nmsClientId=${msClientId.get()}\ncommit=${commit.get().take(7)}\n")
+        f.writeText("version=$appVersion\ncommit=${commit.get().take(7)}\n")
     }
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/buildinfo")) }

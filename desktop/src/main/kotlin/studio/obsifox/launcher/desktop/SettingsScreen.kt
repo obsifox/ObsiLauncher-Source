@@ -1,5 +1,14 @@
 package studio.obsifox.launcher.desktop
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,7 +47,6 @@ fun SettingsScreen() {
     var java by remember { mutableStateOf(st.javaPath.orEmpty()) }
     var host by remember { mutableStateOf(st.net.proxyHost.orEmpty()) }
     var port by remember { mutableStateOf(st.net.proxyPort?.toString().orEmpty()) }
-    var clientId by remember { mutableStateOf(st.msClientId.orEmpty()) }
     val sysMb = remember { Platform.totalMemoryMb().takeIf { it > 0 } ?: 16384 }
     val maxSlider = (sysMb * 3 / 4).coerceAtLeast(2048).toFloat()
     val effectiveMax = if (st.defaultMaxMemoryMb > 0) st.defaultMaxMemoryMb else (sysMb / 2).coerceIn(1024, 4096)
@@ -56,6 +64,35 @@ fun SettingsScreen() {
                 )
                 SwitchRow(t("hide_launcher"), st.hideLauncherWhileRunning, { v -> update { it.copy(hideLauncherWhileRunning = v) } })
                 SwitchRow(t("open_console"), st.openConsoleOnLaunch, { v -> update { it.copy(openConsoleOnLaunch = v) } })
+            }
+        }
+
+        ObsiCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(t("appearance"), color = Obsi.text, fontWeight = FontWeight.Bold)
+                Dim(t("appearance_hint"), maxLines = 2)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ThemePickCard(t("theme_vanilla"), listOf(Color(0xFF321B18), Color(0xFF6D341F), Color(0xFFE06B31)), st.theme == "vanilla", { update { s2 -> s2.copy(theme = "vanilla") } }, Modifier.weight(1f))
+                    ThemePickCard(t("theme_white"), listOf(Color(0xFFF3EEE7), Color(0xFFFFAF5), Color(0xFFE2A47E)), st.theme == "white", { update { s2 -> s2.copy(theme = "white") } }, Modifier.weight(1f))
+                    ThemePickCard(t("theme_black"), listOf(Color(0xFF070809), Color(0xFF161719), Color(0xFFB55A2D)), st.theme == "black", { update { s2 -> s2.copy(theme = "black") } }, Modifier.weight(1f))
+                }
+                val pickTitle = t("bg_pick")
+                DropdownField(
+                    label = t("wiz_step_bg"),
+                    selectedLabel = when (st.wallpaperMode) { "latest" -> t("bg_latest"); "custom" -> t("bg_custom"); else -> t("bg_version") },
+                    options = listOf("version" to t("bg_version"), "latest" to t("bg_latest"), "custom" to t("bg_custom")),
+                    onSelect = { m ->
+                        if (m == "custom") {
+                            val f = pickImageFile(pickTitle)
+                            if (f != null) {
+                                app.task(pickTitle) { _ -> app.core.wallpapers.importCustom(f) }
+                                update { s2 -> s2.copy(wallpaperMode = "custom") }
+                            }
+                        } else update { s2 -> s2.copy(wallpaperMode = m) }
+                    },
+                )
+                SwitchRow(t("adapt_colors"), st.adaptColors, { v -> update { s2 -> s2.copy(adaptColors = v) } }, sub = t("adapt_colors_desc"))
+                Dim(t("bg_version_old") + "  ·  " + t("video_note"), maxLines = 3)
             }
         }
 
@@ -95,7 +132,6 @@ fun SettingsScreen() {
 
         ObsiCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LabeledField(t("ms_client_id"), clientId, { clientId = it; update { s -> s.copy(msClientId = it.trim().ifBlank { null }) } }, hint = t("ms_client_id_hint"))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(t("data_dir"), color = Obsi.text)
@@ -118,5 +154,19 @@ fun SettingsScreen() {
                 Dim(t("about_text"), maxLines = 4)
             }
         }
+    }
+}
+
+@Composable
+private fun ThemePickCard(label: String, swatch: List<Color>, selected: Boolean, onPick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(13.dp))
+            .border(1.dp, if (selected) Obsi.orange else Obsi.soft, RoundedCornerShape(13.dp))
+            .background(if (selected) Obsi.orange.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.03f))
+            .clickable(onClick = onPick).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(swatch)))
+        Text(label, color = Obsi.text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }

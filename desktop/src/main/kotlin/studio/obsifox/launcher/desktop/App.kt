@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -43,18 +42,70 @@ private data class NavItem(val key: String, val icon: ImageVector, val target: S
 @Composable
 fun App(app: AppController) {
     val strings by app.strings.collectAsState()
+    val settings by app.core.settings.flow.collectAsState()
+    val backdrop by app.backdrop.collectAsState()
+    val wizard by app.wizardOpen.collectAsState()
+
+    // committed appearance: theme + (optionally) the wallpaper's own colours
+    LaunchedEffect(settings.theme, settings.adaptColors, backdrop.palette, wizard) {
+        if (!wizard) Obsi.apply(ThemeId.of(settings.theme), if (settings.adaptColors) backdrop.palette else null)
+    }
+    val fullscreen by app.fullscreen.collectAsState()
+    LaunchedEffect(fullscreen) { setFullscreen(fullscreen) }
+
     CompositionLocalProvider(LocalApp provides app, LocalStrings provides strings) {
-        ObsiTheme(strings.lang) { Shell(app) }
+        ObsiTheme(strings.lang) { Root(app) }
+    }
+}
+
+@Composable
+private fun Root(app: AppController) {
+    val gatePassed by app.gatePassed.collectAsState()
+    val wizard by app.wizardOpen.collectAsState()
+    val crash by app.crash.collectAsState()
+
+    Box(Modifier.fillMaxSize().background(Obsi.bg0)) {
+        if (!gatePassed) GateScreen() else Shell(app)
+        if (gatePassed && wizard) FirstRunWizard()
+    }
+
+    crash?.let { c ->
+        AlertDialog(
+            onDismissRequest = { app.crash.value = null },
+            title = { Text(t("crash_title")) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(tf("crash_text", c.instance.name, c.exitCode), color = Obsi.textDim)
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF0A0712)).padding(10.dp)) {
+                        c.tail.takeLast(10).forEach { line ->
+                            val bad = "/ERROR]" in line || "Exception" in line || "Caused by" in line || "crashed" in line
+                            Text(
+                                line, color = if (bad) Obsi.red else Color(0xFFD6D0E8), fontSize = 11.sp, lineHeight = 15.sp, maxLines = 2,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { app.crash.value = null }) { Text(t("close"), color = Obsi.orange) } },
+            dismissButton = { TextButton(onClick = { c.logPath?.let { SystemOpen.open(it.parent) }; app.crash.value = null }) { Text(t("view_log")) } },
+            containerColor = Obsi.bg2, shape = RoundedCornerShape(20.dp),
+        )
     }
 }
 
 @Composable
 private fun Shell(app: AppController) {
     val screen by app.screen.collectAsState()
-    val sessions by app.sessions.collectAsState()
-    val crash by app.crash.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { app.toasts.collect { snackbar.showSnackbar(it) } }
+
+    if (screen == Screen.Home) {
+        Scaffold(containerColor = Color.Transparent, snackbarHost = { SnackbarHost(snackbar) }) { pad ->
+            Box(Modifier.fillMaxSize().padding(pad)) { HomeScreen() }
+        }
+        return
+    }
 
     val nav = remember {
         listOf(
@@ -66,6 +117,7 @@ private fun Shell(app: AppController) {
             NavItem("nav_settings", ObsiIcons.Settings, Screen.Settings) { it is Screen.Settings },
         )
     }
+    val sessions by app.sessions.collectAsState()
 
     Scaffold(containerColor = Obsi.bg0, snackbarHost = { SnackbarHost(snackbar) }) { pad ->
         Row(Modifier.fillMaxSize().padding(pad)) {
@@ -116,34 +168,10 @@ private fun Shell(app: AppController) {
             }
         }
     }
-
-    crash?.let { c ->
-        AlertDialog(
-            onDismissRequest = { app.crash.value = null },
-            title = { Text(t("crash_title")) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(tf("crash_text", c.instance.name, c.exitCode), color = Obsi.textDim)
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF0A0712)).padding(10.dp)) {
-                        c.tail.takeLast(10).forEach { line ->
-                            val bad = "/ERROR]" in line || "Exception" in line || "Caused by" in line || "crashed" in line
-                            Text(
-                                line, color = if (bad) Obsi.red else Color(0xFFD6D0E8), fontSize = 11.sp, lineHeight = 15.sp, maxLines = 2,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { app.crash.value = null }) { Text(t("close"), color = Obsi.orange) } },
-            dismissButton = { TextButton(onClick = { c.logPath?.let { SystemOpen.open(it.parent) }; app.crash.value = null }) { Text(t("view_log")) } },
-            containerColor = Obsi.bg2, shape = RoundedCornerShape(20.dp),
-        )
-    }
 }
 
 @Composable
-private fun TaskBar(app: AppController) {
+internal fun TaskBar(app: AppController) {
     val tasks by app.tasks.collectAsState()
     val strings by app.strings.collectAsState()
     if (tasks.isEmpty()) return

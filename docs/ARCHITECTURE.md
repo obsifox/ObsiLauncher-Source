@@ -23,7 +23,7 @@ only has to download files and run `java`.
 | `mojang` | Version manifest, JSON models, **inheritance resolver** (`inheritsFrom`, child libs win, args concatenated), OS/feature `Rules`, `GameInstaller` (client jar, libraries, legacy natives, asset index + objects, log config). |
 | `java` | `JavaRuntimeManager`: downloads Mojang's per-version runtimes (`java-runtime-delta` …) or falls back to system Java. |
 | `loaders` | Fabric & Quilt (meta servers give a ready version JSON), Forge & NeoForge (official installer jar run headless with the right Java). |
-| `auth` | Microsoft device-code → Xbox Live → XSTS → Minecraft services; offline UUIDs (v3 of `OfflinePlayer:<name>`, identical to vanilla servers). |
+| `auth` | local accounts only: offline UUIDs (v3 of `OfflinePlayer:<name>`, identical to vanilla servers); no Microsoft sign-in. |
 | `modrinth` | API v2 client, `ContentManager` (install + required dependencies, enable/disable, hash-based update check), `ModpackInstaller` (`.mrpack`). |
 | `launch` | `LaunchBuilder` (JVM/game args, placeholders, features, quick-play), `GameSession` (process, live log, log4j-XML → text). |
 | `instance` | `Instance`/`Settings` models, JSON stores. |
@@ -43,7 +43,7 @@ accounts.json (0600)  settings.json  cache/  logs/
 ### Launch pipeline
 
 `prepare()`: ensure loader installed → resolve version chain → download missing libs/assets (cheap no-op if present) →
-pick Java (override → Mojang runtime → system) → refresh the Microsoft token if < 5 min left → build the command.
+pick Java (override → Mojang runtime → system) → build the command with the local account's token placeholders.
 `start()`: spawn, stream output into a ring buffer (4000 lines) + `logs/<id>-latest.log`, record play time on exit.
 
 ## `desktop/`

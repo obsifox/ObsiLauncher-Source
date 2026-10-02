@@ -23,7 +23,7 @@ The builds are on the **[Releases → Nightly builds](https://github.com/obsifox
 | Based on | ZalithLauncher2 `2.6.1` (GPL-3.0), rebranded by an overlay | Written from scratch (Kotlin + Compose Multiplatform) |
 | Profiles (instances), each with its own mods/saves/settings | ✔ | ✔ |
 | Vanilla, Fabric, Quilt, Forge, NeoForge | ✔ | ✔ (auto-installed) |
-| Microsoft account + offline account | ✔ | ✔ (device-code sign-in) |
+| Local (offline) accounts | ✔ | ✔ |
 | Modrinth: search, install with dependencies, update check, `.mrpack` modpacks | ✔ | ✔ |
 | Java runtime | bundled | downloaded from Mojang automatically |
 | UI languages | EN + notice card in FA | **EN + FA (RTL, Vazirmatn font)** |
@@ -46,7 +46,7 @@ CI builds are published in the **[nightly release](../../releases/tag/nightly)**
 
 Install on Linux with `sudo apt install ./ObsiLauncher-<ver>-linux-x64.deb` (tested on Debian 13; the dependency list also accepts the older library names of Debian 12 / Ubuntu 22.04, which were not tested), or unpack the portable archive anywhere and run `ObsiLauncher/bin/ObsiLauncher`. On Windows run the `.msi`, or unzip the portable archive and start `ObsiLauncher.exe`.
 
-Run **Actions → Android / Desktop → Run workflow** to produce fresh ones. See [docs/SETUP.md](docs/SETUP.md) for the optional secrets (Microsoft sign-in needs your own Azure app ID).
+Run **Actions → Android / Desktop → Run workflow** to produce fresh ones. See [docs/SETUP.md](docs/SETUP.md) for the signing secrets.
 
 ## Repository layout
 
@@ -90,9 +90,9 @@ Offline unit tests cover resolver, rules, launch command, UUIDs, log parsing, ve
 
 **Not verified / limits**
 
-* **Microsoft login is disabled until you add `MS_CLIENT_ID` and Mojang approves it** ([docs/SETUP.md](docs/SETUP.md)); the device-code request was checked against Microsoft (errors are reported correctly) but a real sign-in could not be tested. Offline accounts work now.
+* **Accounts are local-only** (offline accounts, stored on the device); there is no Microsoft sign-in. The desktop app opens with an update gate and a one-time setup wizard; the launcher's background art follows the Minecraft version of the selected profile (official Mojang wallpaper packs, `pc_bundle` for versions older than 1.12.2).
 * **Windows** packages (`.msi`, portable `.zip`) are built by CI but were not run on a real Windows PC. The `.msi` is unsigned, so SmartScreen will warn.
 * **Android**: the APK builds, is correctly signed and its manifest/strings were inspected, but it was not installed on a device here.
 * **Quilt**: installs and starts its loader, but its first-run remap is so slow on the 2-core test box that a full start-up was not confirmed.
 * Account tokens are stored in `accounts.json` (owner-only permissions on Linux) like most launchers; OS keychain integration is future work.
-* Not yet: CurseForge on desktop, skins, server list, instance export, macOS packaging, a full Persian translation of the Android app.
+* Not yet: animated/video launcher backgrounds, skins, server list, instance export, macOS packaging, a full Persian translation of the Android app.

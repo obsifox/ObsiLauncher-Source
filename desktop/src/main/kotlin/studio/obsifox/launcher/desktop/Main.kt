@@ -18,7 +18,7 @@ import java.awt.Dimension
 
 fun main() {
     val build = BuildInfo.load()
-    val core = LauncherCore(LauncherPaths(Platform.defaultDataDir()), build.version, build.msClientId)
+    val core = LauncherCore(LauncherPaths(Platform.defaultDataDir()), build.version)
     val app = AppController(core, build)
     val icon = runCatching { BitmapPainter(useResource("icon.png", ::loadImageBitmap)) }.getOrNull()
 

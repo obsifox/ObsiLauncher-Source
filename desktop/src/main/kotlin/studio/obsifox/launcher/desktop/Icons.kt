@@ -2,6 +2,8 @@ package studio.obsifox.launcher.desktop
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
@@ -11,6 +13,16 @@ object ObsiIcons {
     private fun icon(name: String, vararg paths: String): ImageVector =
         ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
             for (d in paths) addPath(PathParser().parsePathString(d).toNodes(), fill = SolidColor(Color.Black))
+        }.build()
+
+
+    /** Outline glyph (stroked, 1.8dp) for the navigation bar - closer to the thin line icons of the design. */
+    private fun outline(name: String, vararg paths: String): ImageVector =
+        ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
+            for (d in paths) addPath(
+                PathParser().parsePathString(d).toNodes(), fill = null, stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+            )
         }.build()
 
     val Home by lazy { icon("home", "M10,20v-6h4v6h5v-8h3L12,3 2,12h3v8z") }
@@ -38,4 +50,14 @@ object ObsiIcons {
     val ArrowBack by lazy { icon("arrow_back", "M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z") }
     val ArrowDown by lazy { icon("arrow_down", "M7.41,8.59L12,13.17l4.59,-4.58L18,10l-6,6 -6,-6 1.41,-1.41z") }
     val Fox by lazy { icon("fox", "M3,3l5.2,3.4L12,5.6l3.8,0.8L21,3l-1.2,8.2L12,21 4.2,11.2z") }
+    val Cube by lazy { outline("cube", "M12,3L20,7.5V16.5L12,21L4,16.5V7.5Z", "M4,7.5L12,12L20,7.5", "M12,12V21") }
+    val Sparkle by lazy { outline("sparkle", "M12,3L13.9,9.1L20,11L13.9,12.9L12,19L10.1,12.9L4,11L10.1,9.1Z", "M19,3V6M17.5,4.5H20.5") }
+    val Globe by lazy { outline("globe", "M12,3A9,9 0 1,0 12.01,3Z", "M3,12H21", "M12,3C15.2,6.2 15.2,17.8 12,21", "M12,3C8.8,6.2 8.8,17.8 12,21") }
+    val Fullscreen by lazy { outline("fullscreen", "M4,9V4H9", "M15,4H20V9", "M20,15V20H15", "M9,20H4V15") }
+    val ArrowRight by lazy { outline("arrow_right", "M5,12H19", "M13,6L19,12L13,18") }
+    val Clock by lazy { outline("clock", "M12,3A9,9 0 1,0 12.01,3Z", "M12,7V12L15.5,14") }
+    val Calendar by lazy { outline("calendar", "M4,6.5H20V20H4Z", "M4,10.5H20", "M8,3.5V8M16,3.5V8") }
+    val Image by lazy { outline("image", "M3.5,4.5H20.5V19.5H3.5Z", "M3.5,16L9,10.5L14,15.5L16.5,13L20.5,17", "M8.5,8.2A1.3,1.3 0 1,0 8.51,8.2Z") }
+    val Palette by lazy { outline("palette", "M12,3C7,3 3,7 3,12C3,17 7,21 12,21C13.5,21 14,20 13.4,18.8C12.8,17.6 13.6,16.5 15,16.5H17C19.2,16.5 21,14.7 21,12.5C21,7.3 17,3 12,3Z", "M7.5,11.5H7.51M10,7.8H10.01M14.2,7.8H14.21M16.8,11.2H16.81") }
+    val Video by lazy { outline("video", "M3.5,6.5H15V17.5H3.5Z", "M15,10.5L20.5,7.5V16.5L15,13.5") }
 }

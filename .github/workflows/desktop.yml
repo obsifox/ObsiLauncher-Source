@@ -32,9 +32,6 @@ jobs:
             os: ubuntu-24.04
           - name: Windows
             os: windows-2022
-    env:
-      # Optional secret (see docs/SETUP.md). Empty = Microsoft sign-in disabled in the build; offline accounts still work.
-      MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v6
 
@@ -90,6 +87,10 @@ jobs:
             else
               echo "::warning::.deb was not produced"
             fi
+          fi
+          # the launcher's own update channel: a tiny manifest the running build compares itself against
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            printf '{"version":"%s","commit":"%s","builtAt":"%s"}' "$VERSION" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest-desktop.json
           fi
           ls -lh dist
 

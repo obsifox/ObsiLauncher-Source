@@ -3,6 +3,7 @@ package studio.obsifox.launcher.desktop
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -138,6 +139,27 @@ fun RemoteImage(url: String?, name: String, size: Dp, modifier: Modifier = Modif
 @Composable
 fun FoxMark(size: Dp, tint: Color = Obsi.orange, modifier: Modifier = Modifier) {
     Image(androidx.compose.ui.graphics.vector.rememberVectorPainter(ObsiIcons.Fox), null, modifier.size(size), colorFilter = ColorFilter.tint(tint))
+}
+
+@Composable
+fun LanguageSwitch() {
+    val app = LocalApp.current
+    val strings = LocalStrings.current
+    Row(
+        Modifier.clip(RoundedCornerShape(999.dp)).border(1.dp, Obsi.soft, RoundedCornerShape(999.dp))
+            .background(Color.Black.copy(alpha = 0.18f)).padding(3.dp),
+    ) {
+        Lang.entries.forEach { l ->
+            val active = strings.lang == l
+            Text(
+                if (l == Lang.FA) "فا" else "EN",
+                color = if (active) Obsi.text else Obsi.textDim, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(999.dp))
+                    .background(if (active) Obsi.orange.copy(alpha = 0.18f) else Color.Transparent)
+                    .clickable { app.setLanguage(l) }.padding(horizontal = 9.dp, vertical = 5.dp),
+            )
+        }
+    }
 }
 
 @Composable

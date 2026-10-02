@@ -12,23 +12,12 @@ import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
 
 @Serializable
-enum class AccountType { MICROSOFT, OFFLINE }
-
-@Serializable
 data class Account(
     val id: String,
-    val type: AccountType,
     var username: String,
     /** Undashed UUID. */
     var uuid: String,
-    var mcAccessToken: String? = null,
-    /** Epoch millis when [mcAccessToken] expires. */
-    var mcExpiresAt: Long = 0,
-    var msRefreshToken: String? = null,
-    var skinUrl: String? = null,
-) {
-    val isMicrosoft: Boolean get() = type == AccountType.MICROSOFT
-}
+)
 
 /** Persists accounts to accounts.json (owner-only permissions where the OS supports it). */
 class AccountStore(private val paths: LauncherPaths) {
