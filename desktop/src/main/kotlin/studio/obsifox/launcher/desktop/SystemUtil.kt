@@ -40,30 +40,6 @@ object SystemOpen {
     }
 }
 
-fun pickImageFile(title: String): Path? {
-    val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD)
-    dialog.setFilenameFilter { _, name -> name.endsWith(".png", true) || name.endsWith(".jpg", true) || name.endsWith(".jpeg", true) || name.endsWith(".webp", true) }
-    dialog.isVisible = true
-    val file = dialog.file ?: return null
-    return Paths.get(dialog.directory ?: "", file)
-}
-
-/** Best-effort exclusive fullscreen on the first AWT window (Compose windows are AWT frames under the hood). */
-fun setFullscreen(on: Boolean) {
-    runCatching {
-        val device = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice
-        val win = java.awt.Window.getWindows().firstOrNull { it.isShowing } ?: return
-        val frame = win as? java.awt.Frame
-        if (on) {
-            if (!device.isFullScreenSupported) frame?.extendedState = java.awt.Frame.MAXIMIZED_BOTH
-            else device.fullScreenWindow = win
-        } else {
-            if (device.fullScreenWindow != null) device.fullScreenWindow = null
-            frame?.extendedState = java.awt.Frame.NORMAL
-        }
-    }
-}
-
 fun copyToClipboard(text: String) {
     runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null) }
 }

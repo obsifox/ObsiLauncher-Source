@@ -1,14 +1,5 @@
 package studio.obsifox.launcher.desktop
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,11 +33,14 @@ fun SettingsScreen() {
         app.core.settings.update(f)
         app.core.applySettings()
     }
+    val o = obsi()
 
     var jvm by remember { mutableStateOf(st.defaultJvmArgs) }
     var java by remember { mutableStateOf(st.javaPath.orEmpty()) }
     var host by remember { mutableStateOf(st.net.proxyHost.orEmpty()) }
     var port by remember { mutableStateOf(st.net.proxyPort?.toString().orEmpty()) }
+    var clientId by remember { mutableStateOf(st.msClientId.orEmpty()) }
+    var customWall by remember { mutableStateOf(st.wallpaperCustom.orEmpty()) }
     val sysMb = remember { Platform.totalMemoryMb().takeIf { it > 0 } ?: 16384 }
     val maxSlider = (sysMb * 3 / 4).coerceAtLeast(2048).toFloat()
     val effectiveMax = if (st.defaultMaxMemoryMb > 0) st.defaultMaxMemoryMb else (sysMb / 2).coerceIn(1024, 4096)
@@ -54,6 +48,35 @@ fun SettingsScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SectionHeader(t("settings_title"))
 
+        // ---------------------------------------------------------------- appearance & wallpaper
+        ObsiCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(t("appearance_title"), color = o.text, fontWeight = FontWeight.Bold)
+                DropdownField(
+                    t("theme"),
+                    when (st.themeMode) { "white" -> t("theme_white"); "black" -> t("theme_black"); else -> t("theme_vanilla") },
+                    listOf("vanilla" to t("theme_vanilla"), "white" to t("theme_white"), "black" to t("theme_black")),
+                    { m -> update { it.copy(themeMode = m) } },
+                )
+                DropdownField(
+                    t("wallpaper_mode"),
+                    when (st.wallpaperMode) { "image" -> t("wallpaper_image"); "video" -> t("wallpaper_video"); else -> t("wallpaper_auto") },
+                    listOf("auto" to t("wallpaper_auto"), "image" to t("wallpaper_image"), "video" to t("wallpaper_video")),
+                    { m -> update { it.copy(wallpaperMode = m) } },
+                )
+                Dim(t("wallpaper_rule_hint"), maxLines = 3)
+                SwitchRow(t("dynamic_tint"), st.dynamicTint, { v -> update { it.copy(dynamicTint = v) } }, sub = t("dynamic_tint_sub"))
+                SwitchRow(t("video_sound"), st.wallpaperSound, { v -> update { it.copy(wallpaperSound = v) } }, sub = t("video_sound_sub"))
+                ObsiField(
+                    customWall,
+                    { customWall = it; update { s -> s.copy(wallpaperCustom = it.trim().ifBlank { null }) } },
+                    label = t("custom_wallpaper"),
+                    placeholder = t("custom_wallpaper_hint"),
+                )
+            }
+        }
+
+        // ---------------------------------------------------------------- language & behaviour
         ObsiCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 DropdownField(
@@ -69,43 +92,14 @@ fun SettingsScreen() {
 
         ObsiCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(t("appearance"), color = Obsi.text, fontWeight = FontWeight.Bold)
-                Dim(t("appearance_hint"), maxLines = 2)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ThemePickCard(t("theme_vanilla"), listOf(Color(0xFF321B18), Color(0xFF6D341F), Color(0xFFE06B31)), st.theme == "vanilla", { update { s2 -> s2.copy(theme = "vanilla") } }, Modifier.weight(1f))
-                    ThemePickCard(t("theme_white"), listOf(Color(0xFFF3EEE7), Color(0xFFFFAF5), Color(0xFFE2A47E)), st.theme == "white", { update { s2 -> s2.copy(theme = "white") } }, Modifier.weight(1f))
-                    ThemePickCard(t("theme_black"), listOf(Color(0xFF070809), Color(0xFF161719), Color(0xFFB55A2D)), st.theme == "black", { update { s2 -> s2.copy(theme = "black") } }, Modifier.weight(1f))
-                }
-                val pickTitle = t("bg_pick")
-                DropdownField(
-                    label = t("wiz_step_bg"),
-                    selectedLabel = when (st.wallpaperMode) { "latest" -> t("bg_latest"); "custom" -> t("bg_custom"); else -> t("bg_version") },
-                    options = listOf("version" to t("bg_version"), "latest" to t("bg_latest"), "custom" to t("bg_custom")),
-                    onSelect = { m ->
-                        if (m == "custom") {
-                            val f = pickImageFile(pickTitle)
-                            if (f != null) {
-                                app.task(pickTitle) { _ -> app.core.wallpapers.importCustom(f) }
-                                update { s2 -> s2.copy(wallpaperMode = "custom") }
-                            }
-                        } else update { s2 -> s2.copy(wallpaperMode = m) }
-                    },
-                )
-                SwitchRow(t("adapt_colors"), st.adaptColors, { v -> update { s2 -> s2.copy(adaptColors = v) } }, sub = t("adapt_colors_desc"))
-                Dim(t("bg_version_old") + "  ·  " + t("video_note"), maxLines = 3)
-            }
-        }
-
-        ObsiCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${t("memory_default")}: $effectiveMax MB", color = Obsi.text, modifier = Modifier.weight(1f))
+                    Text("${t("memory_default")}: $effectiveMax MB", color = o.text, modifier = Modifier.weight(1f))
                     androidx.compose.material3.Checkbox(st.defaultMaxMemoryMb == 0, { auto -> update { it.copy(defaultMaxMemoryMb = if (auto) 0 else effectiveMax) } })
                     Dim(t("memory_auto"))
                 }
                 if (st.defaultMaxMemoryMb > 0) {
                     Slider(st.defaultMaxMemoryMb.toFloat(), { v -> update { it.copy(defaultMaxMemoryMb = (v / 256).toInt() * 256) } }, valueRange = 512f..maxSlider,
-                        colors = SliderDefaults.colors(thumbColor = Obsi.orange, activeTrackColor = Obsi.orange))
+                        colors = SliderDefaults.colors(thumbColor = o.accent, activeTrackColor = o.accent))
                 }
                 LabeledField(t("jvm_default"), jvm, { jvm = it; update { s -> s.copy(defaultJvmArgs = it) } }, hint = "-XX:+UseZGC")
                 LabeledField(t("java_override"), java, { java = it; update { s -> s.copy(javaPath = it.trim().ifBlank { null }) } }, hint = t("java_auto"))
@@ -114,15 +108,15 @@ fun SettingsScreen() {
 
         ObsiCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("${t("threads")}: ${st.downloadThreads}", color = Obsi.text)
+                Text("${t("threads")}: ${st.downloadThreads}", color = o.text)
                 Slider(st.downloadThreads.toFloat(), { v -> update { it.copy(downloadThreads = v.toInt().coerceIn(2, 32)) } }, valueRange = 2f..32f,
-                    colors = SliderDefaults.colors(thumbColor = Obsi.orange, activeTrackColor = Obsi.orange))
+                    colors = SliderDefaults.colors(thumbColor = o.accent, activeTrackColor = o.accent))
                 DropdownField(
                     t("mirror"), if (st.net.mirror == MirrorPreset.BMCLAPI) t("mirror_bmcl") else t("mirror_official"),
                     listOf(MirrorPreset.OFFICIAL.name to t("mirror_official"), MirrorPreset.BMCLAPI.name to t("mirror_bmcl")),
                     { m -> update { it.copy(net = it.net.copy(mirror = MirrorPreset.valueOf(m))) } },
                 )
-                Text(t("proxy"), color = Obsi.text, fontWeight = FontWeight.Medium)
+                Text(t("proxy"), color = o.text, fontWeight = FontWeight.Medium)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LabeledField(t("proxy_host"), host, { host = it; update { s -> s.copy(net = s.net.copy(proxyHost = it.trim().ifBlank { null })) } }, Modifier.weight(2f), hint = "127.0.0.1")
                     LabeledField(t("proxy_port"), port, { p -> port = p.filter(Char::isDigit).take(5); update { s -> s.copy(net = s.net.copy(proxyPort = port.toIntOrNull())) } }, Modifier.weight(1f), hint = "8080")
@@ -132,41 +126,15 @@ fun SettingsScreen() {
 
         ObsiCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LabeledField(t("ms_client_id"), clientId, { clientId = it; update { s -> s.copy(msClientId = it.trim().ifBlank { null }) } }, hint = t("ms_client_id_hint"))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(t("data_dir"), color = Obsi.text)
+                        Text(t("data_dir"), color = o.text)
                         Dim(app.core.paths.root.toString())
                     }
                     SoftButton(t("open_folder"), { SystemOpen.open(app.core.paths.root) }, icon = ObsiIcons.Folder)
                 }
             }
         }
-
-        ObsiCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FoxMark(30.dp)
-                    Column {
-                        Text("ObsiLauncher", color = Obsi.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Dim("${t("version")} ${app.build.version} (${app.build.commit})")
-                    }
-                }
-                Dim(t("about_text"), maxLines = 4)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThemePickCard(label: String, swatch: List<Color>, selected: Boolean, onPick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier.clip(RoundedCornerShape(13.dp))
-            .border(1.dp, if (selected) Obsi.orange else Obsi.soft, RoundedCornerShape(13.dp))
-            .background(if (selected) Obsi.orange.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.03f))
-            .clickable(onClick = onPick).padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(swatch)))
-        Text(label, color = Obsi.text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }

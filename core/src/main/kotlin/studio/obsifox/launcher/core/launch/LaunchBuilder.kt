@@ -83,7 +83,7 @@ object LaunchBuilder {
             rv.assetIndex.id == "legacy" -> assetsDir.resolve("virtual").resolve("legacy")
             else -> assetsDir
         }
-        val token = "0" // local accounts only: vanilla offline servers accept the zero token
+        val token = account.mcAccessToken ?: "0"
         val vars = HashMap<String, String>().apply {
             put("auth_player_name", account.username)
             put("auth_uuid", account.uuid)
@@ -91,7 +91,7 @@ object LaunchBuilder {
             put("auth_session", "token:$token:${account.uuid}")
             put("auth_xuid", "0")
             put("clientid", "0")
-            put("user_type", "legacy")
+            put("user_type", if (account.isMicrosoft) "msa" else "legacy")
             put("user_properties", "{}")
             put("version_name", rv.id)
             put("version_type", rv.type)

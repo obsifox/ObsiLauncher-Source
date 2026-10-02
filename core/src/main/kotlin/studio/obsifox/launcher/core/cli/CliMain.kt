@@ -30,7 +30,7 @@ private suspend fun cli(args: Array<String>) {
         println("usage: obsi-cli versions | loaders <loader> <mc> | search <q> | create <mc> [loader] [ver] | launch <id> [name] [--dry]")
         exitProcess(2)
     }
-    val core = LauncherCore(LauncherPaths(studio.obsifox.launcher.core.util.Platform.defaultDataDir()), "cli")
+    val core = LauncherCore(LauncherPaths(studio.obsifox.launcher.core.util.Platform.defaultDataDir()), "cli", System.getenv("MS_CLIENT_ID"))
     var lastStage = ""
     val progress: (studio.obsifox.launcher.core.util.ProgressUpdate) -> Unit = { u ->
         val line = if (u.fraction >= 0) "${u.stage} ${(u.fraction * 100).toInt()}%" else u.stage
@@ -77,6 +77,12 @@ private suspend fun cli(args: Array<String>) {
             println("installing modpack ${project.title} ${v.versionNumber} (${v.gameVersions.firstOrNull()})")
             val inst = core.modpacks.install(project, v, progress)
             println("created ${inst.id}: ${inst.mcVersion} ${inst.loader} -> ${inst.launchVersionId}")
+        }
+        "ms-probe" -> {
+            try {
+                val info = core.auth.microsoft.startDeviceCode()
+                println("device code OK: ${info.userCode} at ${info.verificationUri} (valid ${info.expiresInSec}s)")
+            } catch (e: Exception) { println("device code failed: ${e.message}") }
         }
         "launch" -> {
             val id = args[1]

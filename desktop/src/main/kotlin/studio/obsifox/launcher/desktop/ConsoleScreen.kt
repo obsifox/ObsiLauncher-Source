@@ -55,7 +55,7 @@ fun ConsoleScreen() {
         val lines by session.lines.collectAsState()
         val running by session.running.collectAsState()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Pill(if (running) tf("console_running", session.pid) else t("game_exited"), if (running) Obsi.green else Obsi.textDim)
+            Pill(if (running) tf("console_running", session.pid) else t("game_exited"), if (running) obsi().good else obsi().textDim)
             Dim(session.instance.name, modifier = Modifier.weight(1f))
             SoftButton(t("copy_log"), { copyToClipboard(lines.joinToString("\n")); app.toast(app.s["copied"]) }, icon = ObsiIcons.Copy)
             SoftButton(t("open_folder"), { SystemOpen.open(app.core.paths.gameDir(session.instance.id)) }, icon = ObsiIcons.Folder)
@@ -70,8 +70,8 @@ fun ConsoleScreen() {
                     items(lines.size) { i ->
                         val l = lines[i]
                         val color = when {
-                            "/ERROR]" in l || l.startsWith("Exception") || l.contains("Caused by") -> Obsi.red
-                            "/WARN]" in l -> Obsi.yellow
+                            "/ERROR]" in l || l.startsWith("Exception") || l.contains("Caused by") -> obsi().bad
+                            "/WARN]" in l -> obsi().warn
                             else -> Color(0xFFD6D0E8)
                         }
                         Text(l, color = color, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp)

@@ -86,8 +86,8 @@ private fun InstanceCard(inst: Instance, running: Boolean, onDelete: () -> Unit)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 InstanceIcon(inst, 56.dp)
                 Column(Modifier.weight(1f)) {
-                    Text(inst.name, style = MaterialTheme.typography.titleMedium, color = Obsi.text, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Text(inst.subtitle, color = Obsi.orange, fontSize = 13.sp)
+                    Text(inst.name, style = MaterialTheme.typography.titleMedium, color = obsi().text, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(inst.subtitle, color = obsi().accent, fontSize = 13.sp)
                     Dim(lastPlayedText(inst))
                 }
                 Box {
@@ -96,7 +96,7 @@ private fun InstanceCard(inst: Instance, running: Boolean, onDelete: () -> Unit)
                         DropdownMenuItem(text = { Text(t("profile_settings")) }, onClick = { menu = false; app.go(Screen.InstanceDetail(inst.id, 3)) })
                         DropdownMenuItem(text = { Text(t("open_folder")) }, onClick = { menu = false; SystemOpen.open(app.core.paths.gameDir(inst.id)) })
                         DropdownMenuItem(text = { Text(t("duplicate")) }, onClick = { menu = false; app.duplicateInstance(inst) })
-                        DropdownMenuItem(text = { Text(t("delete"), color = Obsi.red) }, onClick = { menu = false; onDelete() })
+                        DropdownMenuItem(text = { Text(t("delete"), color = obsi().bad) }, onClick = { menu = false; onDelete() })
                     }
                 }
             }
@@ -122,6 +122,7 @@ fun NewInstanceDialog(onDismiss: () -> Unit) {
     var nameTouched by remember { mutableStateOf(false) }
     var filter by remember { mutableStateOf("") }
     var snapshots by remember { mutableStateOf(false) }
+    var oldVersions by remember { mutableStateOf(false) }
     var mc by remember { mutableStateOf<String?>(null) }
     var loader by remember { mutableStateOf(LoaderType.VANILLA) }
     var loaderVersion by remember { mutableStateOf<String?>(null) }
@@ -144,8 +145,15 @@ fun NewInstanceDialog(onDismiss: () -> Unit) {
         if (!nameTouched && mc != null) name = if (loader == LoaderType.VANILLA) "Minecraft $mc" else "${loader.display} $mc"
     }
 
-    val visible = remember(manifest, filter, snapshots) {
-        manifest.orEmpty().filter { (snapshots || it.type == "release") && (it.type == "release" || it.type == "snapshot") && it.id.contains(filter.trim(), true) }
+    // every version type from the Mojang manifest is installable: releases,
+    // snapshots and the historical old_beta / old_alpha versions.
+    val visible = remember(manifest, filter, snapshots, oldVersions) {
+        manifest.orEmpty().filter {
+            (it.type == "release"
+                || (snapshots && it.type == "snapshot")
+                || (oldVersions && (it.type == "old_beta" || it.type == "old_alpha")))
+                && it.id.contains(filter.trim(), true)
+        }
     }
     val noLoader = loader != LoaderType.VANILLA && loaderVersions?.isEmpty() == true
 
@@ -161,31 +169,33 @@ fun NewInstanceDialog(onDismiss: () -> Unit) {
         LabeledField(t("instance_name"), name, { name = it; nameTouched = true })
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(t("mc_version"), color = Obsi.textDim, modifier = Modifier.weight(1f))
+            Text(t("mc_version"), color = obsi().textDim, modifier = Modifier.weight(1f))
             Checkbox(snapshots, { snapshots = it })
-            Text(t("show_snapshots"), color = Obsi.textDim)
+            Text(t("show_snapshots"), color = obsi().textDim)
+            Checkbox(oldVersions, { oldVersions = it }, modifier = Modifier.padding(start = 14.dp))
+            Text(t("show_old_versions"), color = obsi().textDim)
         }
         LabeledField(t("version_filter"), filter, { filter = it })
         if (manifest == null) {
             Dim(t("loading"))
         } else if (manifest!!.isEmpty()) {
-            Text(t("error"), color = Obsi.red)
+            Text(t("error"), color = obsi().bad)
         } else {
-            LazyColumn(Modifier.height(150.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Obsi.bg1)) {
+            LazyColumn(Modifier.height(150.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(obsi().glassInput)) {
                 items(visible.take(200), key = { it.id }) { v ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { mc = v.id }.background(if (v.id == mc) Obsi.bg3 else Color.Transparent).padding(horizontal = 14.dp, vertical = 8.dp),
+                        Modifier.fillMaxWidth().clickable { mc = v.id }.background(if (v.id == mc) obsi().glassHigh else Color.Transparent).padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(v.id, color = if (v.id == mc) Obsi.orange else Obsi.text, fontWeight = if (v.id == mc) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
-                        if (v.id == latestRelease) Pill(t("latest"), Obsi.green)
-                        else if (v.type == "snapshot") Pill("snapshot", Obsi.yellow)
+                        Text(v.id, color = if (v.id == mc) obsi().accent else obsi().text, fontWeight = if (v.id == mc) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                        if (v.id == latestRelease) Pill(t("latest"), obsi().good)
+                        else if (v.type == "snapshot") Pill("snapshot", obsi().warn)
                     }
                 }
             }
         }
 
-        Text(t("loader"), color = Obsi.textDim)
+        Text(t("loader"), color = obsi().textDim)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LoaderType.entries.forEach { l ->
                 FilterChip(selected = loader == l, onClick = { loader = l }, label = { Text(l.display) })
@@ -194,7 +204,7 @@ fun NewInstanceDialog(onDismiss: () -> Unit) {
         if (loader != LoaderType.VANILLA) {
             when {
                 loaderVersions == null -> Dim(t("loading"))
-                loaderVersions!!.isEmpty() -> Text(tf("no_compatible", "$mc ${loader.display}"), color = Obsi.red)
+                loaderVersions!!.isEmpty() -> Text(tf("no_compatible", "$mc ${loader.display}"), color = obsi().bad)
                 else -> DropdownField(
                     t("loader_version"),
                     loaderVersions!!.firstOrNull { it.version == loaderVersion }?.let { it.version + if (it.recommended) " · " + t("recommended") else "" } ?: "",

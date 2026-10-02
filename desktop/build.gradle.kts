@@ -1,4 +1,5 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.gradle.internal.os.OperatingSystem
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
@@ -17,6 +18,17 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
     implementation(libs.kotlinx.coroutines.swing)
+    // JavaFX Media powers the muted trailer background for the latest release (auto-fallback to the still wallpaper)
+    val jfxOs = when {
+        OperatingSystem.current().isWindows -> "win"
+        OperatingSystem.current().isMacOsX -> "mac"
+        else -> "linux"
+    }
+    val jfxVersion = "21.0.8"
+    implementation("org.openjfx:javafx-base:$jfxVersion:$jfxOs")
+    implementation("org.openjfx:javafx-graphics:$jfxVersion:$jfxOs")
+    implementation("org.openjfx:javafx-swing:$jfxVersion:$jfxOs")
+    implementation("org.openjfx:javafx-media:$jfxVersion:$jfxOs")
     testImplementation(kotlin("test"))
 }
 
@@ -25,17 +37,19 @@ tasks.test {
     maxHeapSize = "512m"
 }
 
-// build.properties: version + CI commit, embedded for the update check
+// build.properties: version + the Azure client id injected by CI (secret MS_CLIENT_ID; empty = Microsoft login disabled)
 val generateBuildInfo by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/buildinfo")
+    val msClientId = providers.environmentVariable("MS_CLIENT_ID").orElse("")
     val commit = providers.environmentVariable("GITHUB_SHA").orElse("dev")
     inputs.property("version", appVersion)
+    inputs.property("msClientId", msClientId)
     inputs.property("commit", commit)
     outputs.dir(outDir)
     doLast {
         val f = outDir.get().file("obsi-build.properties").asFile
         f.parentFile.mkdirs()
-        f.writeText("version=$appVersion\ncommit=${commit.get().take(7)}\n")
+        f.writeText("version=$appVersion\nmsClientId=${msClientId.get()}\ncommit=${commit.get().take(7)}\n")
     }
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/buildinfo")) }
@@ -55,7 +69,8 @@ compose.desktop {
             copyright = "© ObsiFox Studio"
             // modules the packaged runtime needs (see `./gradlew :desktop:suggestRuntimeModules`)
             modules("java.instrument", "java.management", "java.net.http", "jdk.unsupported", "java.naming", "java.sql", "jdk.crypto.ec", "jdk.accessibility")
-
+            // JavaFX ships as automatic modules on the classpath; include them in the packaged runtime image
+            modules("javafx.base", "javafx.graphics", "javafx.swing", "javafx.media")
             windows {
                 iconFile.set(project.file("packaging/icon.ico"))
                 menuGroup = "ObsiFox"

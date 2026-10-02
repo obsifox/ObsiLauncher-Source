@@ -6,6 +6,11 @@ pluginManagement {
     }
 }
 
+plugins {
+    // lets Gradle auto-provision a matching JDK (21) on machines that only ship a JRE
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
 dependencyResolutionManagement {
     repositories {
         mavenCentral()

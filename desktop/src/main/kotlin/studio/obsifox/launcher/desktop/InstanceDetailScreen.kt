@@ -56,19 +56,19 @@ fun InstanceDetailScreen(id: String, initialTab: Int) {
     val running = sessions[inst.id]?.running?.value == true
     Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            IconAction(ObsiIcons.ArrowBack, t("back"), { app.go(Screen.Instances) }, tint = Obsi.text)
+            IconAction(ObsiIcons.ArrowBack, t("back"), { app.go(Screen.Instances) }, tint = obsi().text)
             InstanceIcon(inst, 52.dp)
             Column(Modifier.weight(1f)) {
-                Text(inst.name, style = MaterialTheme.typography.titleLarge, color = Obsi.text, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                Text(inst.subtitle, color = Obsi.orange)
+                Text(inst.name, style = MaterialTheme.typography.titleLarge, color = obsi().text, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(inst.subtitle, color = obsi().accent)
             }
             SoftButton(t("open_folder"), { SystemOpen.open(app.core.paths.gameDir(inst.id)) }, icon = ObsiIcons.Folder)
             if (running) SoftButton(t("stop"), { app.stop(inst.id) }, icon = ObsiIcons.Stop, danger = true)
             else PrimaryButton(t("play"), { app.play(inst) }, icon = ObsiIcons.Play)
         }
         val titles = listOf(t("tab_mods"), t("tab_resourcepacks"), t("tab_shaders"), t("tab_settings"))
-        TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = Obsi.orange) {
-            titles.forEachIndexed { i, title -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(title) }, selectedContentColor = Obsi.orange, unselectedContentColor = Obsi.textDim) }
+        TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = obsi().accent) {
+            titles.forEachIndexed { i, title -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(title) }, selectedContentColor = obsi().accent, unselectedContentColor = obsi().textDim) }
         }
         when (tab) {
             0 -> ContentTab(inst, ProjectKind.MOD)
@@ -120,7 +120,7 @@ private fun ContentTab(inst: Instance, kind: ProjectKind) {
             if (busy) Dim(t("loading"))
             else if (checked) Dim(if (updates.isEmpty()) t("no_updates") else tf("updates_found", updates.size))
         }
-        if (vanillaMods) Text(t("loader_none_hint"), color = Obsi.yellow, fontSize = 13.sp)
+        if (vanillaMods) Text(t("loader_none_hint"), color = obsi().warn, fontSize = 13.sp)
 
         val list = files
         when {
@@ -144,15 +144,15 @@ private fun ContentRow(inst: Instance, f: ContentFile, update: ContentUpdate?, o
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             RemoteImage(f.entry?.iconUrl, f.displayName, 40.dp)
             Column(Modifier.weight(1f)) {
-                Text(f.displayName, color = if (f.enabled) Obsi.text else Obsi.textDim, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+                Text(f.displayName, color = if (f.enabled) obsi().text else obsi().textDim, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
                 Dim((f.entry?.versionNumber?.let { "$it · " } ?: "") + formatSize(f.sizeBytes) + (if (f.entry == null) " · " + t("unknown_source") else ""))
             }
             if (update != null) {
-                Pill(update.latest.versionNumber, Obsi.green)
+                Pill(update.latest.versionNumber, obsi().good)
                 SoftButton(t("update"), { app.task<Unit>(app.s.fmt("installing", f.displayName)) { p -> app.core.content.applyUpdate(inst, update, p) } })
             }
             ObsiSwitch(f.enabled, { on -> scope.launch { app.core.content.setEnabled(inst, f, on); onChanged() } })
-            IconAction(ObsiIcons.Delete, t("remove"), { scope.launch { app.core.content.remove(inst, f); onChanged() } }, tint = Obsi.red)
+            IconAction(ObsiIcons.Delete, t("remove"), { scope.launch { app.core.content.remove(inst, f); onChanged() } }, tint = obsi().bad)
         }
     }
 }
@@ -179,9 +179,9 @@ private fun SettingsTab(inst: Instance) {
         ObsiCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LabeledField(t("instance_name"), name, { name = it })
-                Text("${t("memory_max")}: ${maxMb.toInt()} MB", color = Obsi.text)
+                Text("${t("memory_max")}: ${maxMb.toInt()} MB", color = obsi().text)
                 Slider(maxMb, { maxMb = (it / 256f).toInt() * 256f }, valueRange = 512f..maxSlider,
-                    colors = SliderDefaults.colors(thumbColor = Obsi.orange, activeTrackColor = Obsi.orange))
+                    colors = SliderDefaults.colors(thumbColor = obsi().accent, activeTrackColor = obsi().accent))
                 LabeledField(t("java_path"), java, { java = it }, hint = t("java_auto"))
                 LabeledField(t("jvm_args"), jvm, { jvm = it }, hint = "-XX:+UseZGC -Dkey=value")
                 LabeledField(t("game_args"), gameArgs, { gameArgs = it })
@@ -189,7 +189,7 @@ private fun SettingsTab(inst: Instance) {
         }
         ObsiCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(t("resolution"), color = Obsi.text, fontWeight = FontWeight.Medium)
+                Text(t("resolution"), color = obsi().text, fontWeight = FontWeight.Medium)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LabeledField(t("width"), width, { width = it.filter(Char::isDigit).take(5) }, Modifier.weight(1f), hint = "854")
                     LabeledField(t("height"), height, { height = it.filter(Char::isDigit).take(5) }, Modifier.weight(1f), hint = "480")

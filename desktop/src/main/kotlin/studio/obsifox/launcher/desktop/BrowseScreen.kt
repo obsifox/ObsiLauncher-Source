@@ -92,7 +92,7 @@ fun BrowseScreen(initial: Screen.Browse) {
         }
         LabeledField(
             t("search"), query, { query = it }, hint = t("search_hint"),
-            trailing = { Icon(ObsiIcons.Search, null, tint = Obsi.textDim) },
+            trailing = { Icon(ObsiIcons.Search, null, tint = obsi().textDim) },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             ProjectKind.entries.filter { it != ProjectKind.DATAPACK }.forEach { k ->
@@ -121,7 +121,7 @@ fun BrowseScreen(initial: Screen.Browse) {
         val listState = rememberLazyListState()
         when {
             error != null -> EmptyState(ObsiIcons.Warning, t("error"), error) { SoftButton(t("retry"), { reloadKey++ }, icon = ObsiIcons.Refresh) }
-            hits.isEmpty() && loading -> Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) { CircularProgressIndicator(color = Obsi.orange) }
+            hits.isEmpty() && loading -> Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) { CircularProgressIndicator(color = obsi().accent) }
             hits.isEmpty() -> EmptyState(ObsiIcons.Search, t("no_results"))
             else -> LazyColumn(Modifier.fillMaxSize(), state = listState, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(hits, key = { it.projectId }) { hit ->
@@ -139,7 +139,7 @@ fun BrowseScreen(initial: Screen.Browse) {
                 item {
                     if (hits.size < total) {
                         Box(Modifier.fillMaxWidth().padding(12.dp), Alignment.Center) {
-                            if (loading) CircularProgressIndicator(color = Obsi.orange)
+                            if (loading) CircularProgressIndicator(color = obsi().accent)
                             else SoftButton(t("load_more"), { scope.launch { load(hits.size) } })
                         }
                     }
@@ -158,13 +158,13 @@ private fun ProjectRow(hit: ProjectHit, target: Instance?, kind: ProjectKind, on
             RemoteImage(hit.iconUrl, hit.title, 64.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(hit.title, color = Obsi.text, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(hit.title, color = obsi().text, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Dim(tf("by_author", hit.author))
                 }
                 Dim(hit.description, size = 13, maxLines = 2)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Pill(tf("downloads_count", formatCount(hit.downloads)), Obsi.green)
-                    hit.displayCategories.take(3).forEach { Pill(it.replaceFirstChar { c -> c.uppercase() }, Obsi.purple) }
+                    Pill(tf("downloads_count", formatCount(hit.downloads)), obsi().good)
+                    hit.displayCategories.take(3).forEach { Pill(it.replaceFirstChar { c -> c.uppercase() }, obsi().secondary) }
                 }
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -194,9 +194,9 @@ private fun VersionPickerDialog(hit: ProjectHit, target: Instance?, onDismiss: (
     }
     WideDialog(tf("pick_version_title", hit.title), onDismiss, width = 640.dp) {
         when {
-            error != null -> Text(error!!, color = Obsi.red)
+            error != null -> Text(error!!, color = obsi().bad)
             versions == null -> Dim(t("loading"))
-            versions!!.isEmpty() -> Text(tf("no_compatible", target?.let { "${it.mcVersion} ${it.loader.display}" } ?: ""), color = Obsi.textDim)
+            versions!!.isEmpty() -> Text(tf("no_compatible", target?.let { "${it.mcVersion} ${it.loader.display}" } ?: ""), color = obsi().textDim)
             else -> LazyColumn(Modifier.padding(0.dp).fillMaxWidth().androidxHeight(320), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(versions!!.take(80), key = { it.id }) { v ->
                     ObsiCard(Modifier.fillMaxWidth(), onClick = {
@@ -207,10 +207,10 @@ private fun VersionPickerDialog(hit: ProjectHit, target: Instance?, onDismiss: (
                     }) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Column(Modifier.weight(1f)) {
-                                Text(v.name.ifBlank { v.versionNumber }, color = Obsi.text, fontWeight = FontWeight.Medium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                Text(v.name.ifBlank { v.versionNumber }, color = obsi().text, fontWeight = FontWeight.Medium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 Dim(tf("version_meta", v.gameVersions.take(4).joinToString(", ") + if (v.gameVersions.size > 4) "…" else "", v.loaders.joinToString(", ")))
                             }
-                            Pill(v.versionType, when (v.versionType) { "release" -> Obsi.green; "beta" -> Obsi.yellow; else -> Obsi.red })
+                            Pill(v.versionType, when (v.versionType) { "release" -> obsi().good; "beta" -> obsi().warn; else -> obsi().bad })
                         }
                     }
                 }

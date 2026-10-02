@@ -4,15 +4,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.luminance
-import studio.obsifox.launcher.core.wallpaper.Palette
-import kotlin.math.max
-import kotlin.math.min
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -24,113 +18,124 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalLayoutDirection
 
-enum class ThemeId(val key: String) {
-    VANILLA("vanilla"), WHITE("white"), BLACK("black");
-
-    companion object {
-        fun of(key: String?): ThemeId = entries.firstOrNull { it.key == key } ?: VANILLA
-    }
-}
-
 /**
- * ObsiLauncher palette. Every value is Compose state, so each composable that reads one follows theme and wallpaper changes
- * without being rewired. [apply] is the only writer: it takes the chosen theme (Vanilla / White / Black) and, optionally,
- * the [Palette] of the current wallpaper, which tints the surfaces and picks the accent ("the design takes the artwork's colour").
+ * ObsiLauncher v2 palette — glass surfaces over a full-bleed wallpaper.
+ *
+ * Every surface colour carries its own alpha; components draw them on top of the
+ * wallpaper so the artwork softly shines through ("frosted glass" look).
  */
-object Obsi {
-    var theme by mutableStateOf(ThemeId.VANILLA); private set
-    val isLight: Boolean get() = theme == ThemeId.WHITE
-
-    // opaque tones for cards that sit on the glass panel
-    var bg0 by mutableStateOf(Color(0xFF170F0F)); private set
-    var bg1 by mutableStateOf(Color(0xFF241615)); private set
-    var bg2 by mutableStateOf(Color(0xFF2E1E1C)); private set
-    var bg3 by mutableStateOf(Color(0xFF3A2824)); private set
-    var line by mutableStateOf(Color(0x38FFEFE1)); private set
-    var soft by mutableStateOf(Color(0x1FFFEFE1)); private set
-    var text by mutableStateOf(Color(0xFFFFF8F1)); private set
-    var textDim by mutableStateOf(Color(0xFFC0B3A8)); private set
-
-    // translucent panels drawn over the wallpaper
-    var glass by mutableStateOf(Color(0x781F1211)); private set
-    var glassStrong by mutableStateOf(Color(0xD11C1111)); private set
-
-    /** Main accent. Always readable on [bg1] (text, icons and fills use it). Kept under the old name `orange`. */
-    var orange by mutableStateOf(Color(0xFFDC6B32)); private set
-    var orangeDeep by mutableStateOf(Color(0xFFC85322)); private set
-    var accentLight by mutableStateOf(Color(0xFFF39A60)); private set
-
-    /** Text / icon colour that reads on top of [orange]. */
-    var onAccent by mutableStateOf(Color(0xFF1B0F00)); private set
-
-    val purple = Color(0xFF8B5CF6)
-    val green = Color(0xFF4ADE80)
-    val red = Color(0xFFF87171)
-    val yellow = Color(0xFFFACC15)
-
-    fun apply(id: ThemeId, palette: Palette?) {
-        val adapt = palette != null && palette.vivid
-        val hue = if (adapt) palette!!.hue else when (id) { ThemeId.VANILLA -> 6f; ThemeId.BLACK -> 20f; ThemeId.WHITE -> 28f }
-        val sat = if (adapt) palette!!.saturation else 0.7f
-        val bgSat: Float
-        when (id) {
-            ThemeId.VANILLA -> {
-                bgSat = if (adapt) (sat * 0.55f).coerceIn(0.28f, 0.50f) else 0.42f
-                bg0 = Color.hsv(hue, bgSat, 0.085f); bg1 = Color.hsv(hue, bgSat, 0.13f); bg2 = Color.hsv(hue, bgSat, 0.17f); bg3 = Color.hsv(hue, bgSat, 0.23f)
-                glass = Color.hsv(hue, bgSat * 0.9f, 0.115f).copy(alpha = 0.47f); glassStrong = Color.hsv(hue, bgSat * 0.9f, 0.105f).copy(alpha = 0.82f)
-                line = Color(0x38FFEFE1); soft = Color(0x1FFFEFE1); text = Color(0xFFFFF8F1); textDim = Color(0xFFC0B3A8)
-            }
-            ThemeId.BLACK -> {
-                bgSat = if (adapt) (sat * 0.22f).coerceIn(0.08f, 0.18f) else 0.10f
-                bg0 = Color.hsv(hue, bgSat, 0.03f); bg1 = Color.hsv(hue, bgSat, 0.06f); bg2 = Color.hsv(hue, bgSat, 0.09f); bg3 = Color.hsv(hue, bgSat, 0.13f)
-                glass = Color.hsv(hue, bgSat, 0.03f).copy(alpha = 0.69f); glassStrong = Color.hsv(hue, bgSat, 0.03f).copy(alpha = 0.92f)
-                line = Color(0x29FFF5EA); soft = Color(0x1AFFF5EA); text = Color(0xFFF6F2EE); textDim = Color(0xFFB7AEA6)
-            }
-            ThemeId.WHITE -> {
-                bgSat = if (adapt) (sat * 0.14f).coerceIn(0.04f, 0.12f) else 0.06f
-                bg0 = Color.hsv(hue, bgSat, 0.95f); bg1 = Color.hsv(hue, bgSat * 0.6f, 0.985f); bg2 = Color.hsv(hue, bgSat, 0.935f); bg3 = Color.hsv(hue, bgSat * 1.3f, 0.88f)
-                glass = Color.hsv(hue, bgSat, 0.975f).copy(alpha = 0.76f); glassStrong = Color.hsv(hue, bgSat, 0.985f).copy(alpha = 0.93f)
-                line = Color(0x33422A1F); soft = Color(0x1F422A1F); text = Color(0xFF261A15); textDim = Color(0xFF6B5D55)
-            }
+data class ObsiPalette(
+    // solid backdrop (window base, under the wallpaper)
+    val bg0: Color,
+    // glass surface fills (semi-transparent)
+    val glass: Color,
+    val glassHigh: Color,
+    val glassLow: Color,
+    val glassInput: Color,
+    // hairlines
+    val line: Color,
+    val lineSoft: Color,
+    // accents
+    val accent: Color,
+    val accentDeep: Color,
+    val accentSoft: Color,
+    val onAccent: Color,
+    val secondary: Color,
+    // text
+    val text: Color,
+    val textDim: Color,
+    val textFaint: Color,
+    // semantic
+    val good: Color,
+    val warn: Color,
+    val bad: Color,
+    // scrim over the wallpaper for text readability
+    val scrim: Color,
+    // metadata
+    val dark: Boolean,
+) {
+    companion object {
+        /** Warm charcoal glass with the restrained fox-orange accent (default "Vanilla" theme). */
+        fun vanilla(a: PaletteSample? = null): ObsiPalette {
+            val accent = a?.accent ?: Color(0xFFDC6B32)
+            val deep = a?.accentDeep ?: Color(0xFFC85322)
+            val soft = a?.accentSoft ?: Color(0xFFF39A60)
+            return ObsiPalette(
+                bg0 = Color(0xFF120D08),
+                glass = Color(0xCC1C140C),
+                glassHigh = Color(0xE6251A10),
+                glassLow = Color(0x99171009),
+                glassInput = Color(0xB31F150B),
+                line = Color(0x59DC8A55),
+                lineSoft = Color(0x2EDC8A55),
+                accent = accent, accentDeep = deep, accentSoft = soft, onAccent = Color(0xFF1B0F00),
+                secondary = a?.found?.let { if (it) Color(0xFF7C5CD6) else Color(0xFF8B5CF6) } ?: Color(0xFF8B5CF6),
+                text = Color(0xFFF4EEE6),
+                textDim = Color(0xFFC3B6A6),
+                textFaint = Color(0xFF8F8375),
+                good = Color(0xFF63D488), warn = Color(0xFFF2C94C), bad = Color(0xFFF4726E),
+                scrim = Color(0x660A0603),
+                dark = true,
+            )
         }
-        theme = id
 
-        if (adapt) {
-            val v = palette!!.value.coerceIn(0.80f, 0.96f)
-            val s = (sat * 1.05f).coerceIn(0.52f, 0.90f)
-            orange = fitAccent(hue, s, v, bg1, light = id == ThemeId.WHITE, minContrast = 4.5)
-            orangeDeep = Color.hsv(hue, min(1f, s + 0.08f), (v * 0.78f).coerceAtLeast(0.30f)).let { if (id == ThemeId.WHITE) fitAccent(hue, min(1f, s + 0.1f), v * 0.7f, bg1, true, 6.0) else it }
-            accentLight = Color.hsv(hue, s * 0.62f, min(1f, v + 0.08f)).let { if (id == ThemeId.WHITE) fitAccent(hue, s * 0.8f, v, bg1, true, 3.0) else it }
-        } else when (id) {
-            ThemeId.VANILLA -> { orange = Color(0xFFDC6B32); orangeDeep = Color(0xFFC85322); accentLight = Color(0xFFF39A60) }
-            ThemeId.WHITE -> { orange = Color(0xFFC65D2A); orangeDeep = Color(0xFFAC471D); accentLight = Color(0xFFE88B55) }
-            ThemeId.BLACK -> { orange = Color(0xFFC96A36); orangeDeep = Color(0xFF9F4B24); accentLight = Color(0xFFE18A55) }
+        /** Light ivory glass ("White" theme). */
+        fun white(a: PaletteSample? = null): ObsiPalette {
+            val accent = a?.accentDeep ?: Color(0xFFC65D2A)
+            return ObsiPalette(
+                bg0 = Color(0xFFEFE9DF),
+                glass = Color(0xC9F7F2E9),
+                glassHigh = Color(0xE6FFFBF3),
+                glassLow = Color(0x99F1EBE0),
+                glassInput = Color(0xB3F4EEE4),
+                line = Color(0x45A08663),
+                lineSoft = Color(0x26A08663),
+                accent = accent, accentDeep = a?.accentDeep ?: Color(0xFFAC471D), accentSoft = a?.accentSoft ?: Color(0xFFE88B55), onAccent = Color(0xFFFFF6EC),
+                secondary = Color(0xFF7C5CD6),
+                text = Color(0xFF2B2117),
+                textDim = Color(0xFF6E5F4E),
+                textFaint = Color(0xFF9C8D7B),
+                good = Color(0xFF2E8B57), warn = Color(0xFFB8860B), bad = Color(0xFFC94F4B),
+                scrim = Color(0x33EFE6D8),
+                dark = false,
+            )
         }
-        val dark = Color(0xFF1B0F00)
-        onAccent = if (contrast(orange, dark) >= contrast(orange, Color.White)) dark else Color.White
-    }
 
-    /** Nudges brightness / saturation until [minContrast] against [bg] is reached (brighter on dark surfaces, darker on light ones). */
-    private fun fitAccent(h: Float, s0: Float, v0: Float, bg: Color, light: Boolean, minContrast: Double): Color {
-        var s = s0
-        var v = v0
-        repeat(40) {
-            val c = Color.hsv(h, s.coerceIn(0f, 1f), v.coerceIn(0f, 1f))
-            if (contrast(c, bg) >= minContrast) return c
-            if (light) { v = max(0.18f, v - 0.03f); s = min(0.95f, s + 0.01f) } else { v = min(1f, v + 0.02f); if (v >= 0.98f) s = max(0.22f, s - 0.03f) }
+        /** Near-black low-glare glass ("Black" theme). */
+        fun black(a: PaletteSample? = null): ObsiPalette {
+            val accent = a?.accent ?: Color(0xFFC96A36)
+            return ObsiPalette(
+                bg0 = Color(0xFF0A0A0C),
+                glass = Color(0xD3141418),
+                glassHigh = Color(0xEC1C1C22),
+                glassLow = Color(0x99101014),
+                glassInput = Color(0xB318181E),
+                line = Color(0x40FFFFFF),
+                lineSoft = Color(0x1FFFFFFF),
+                accent = accent, accentDeep = a?.accentDeep ?: Color(0xFF9F4B24), accentSoft = a?.accentSoft ?: Color(0xFFE18A55), onAccent = Color(0xFF1B0F00),
+                secondary = Color(0xFF8B5CF6),
+                text = Color(0xFFEDEDEF),
+                textDim = Color(0xFFA6A6AE),
+                textFaint = Color(0xFF74747C),
+                good = Color(0xFF4ADE80), warn = Color(0xFFFACC15), bad = Color(0xFFF87171),
+                scrim = Color(0x73000000),
+                dark = true,
+            )
         }
-        return Color.hsv(h, s.coerceIn(0f, 1f), v.coerceIn(0f, 1f))
     }
-
-    /** WCAG contrast ratio between two opaque colours. */
-    fun contrast(a: Color, b: Color): Double {
-        val la = a.luminance().toDouble() + 0.05
-        val lb = b.luminance().toDouble() + 0.05
-        return max(la, lb) / min(la, lb)
-    }
-
-    init { apply(ThemeId.VANILLA, null) }
 }
+
+fun themePalette(mode: String, sample: PaletteSample?): ObsiPalette = when (mode) {
+    "white" -> ObsiPalette.white(sample)
+    "black" -> ObsiPalette.black(sample)
+    else -> ObsiPalette.vanilla(sample)
+}
+
+val LocalObsi = staticCompositionLocalOf { ObsiPalette.vanilla() }
+
+/** The active glass palette — use this instead of hardcoded colours. */
+@Composable
+fun obsi(): ObsiPalette = LocalObsi.current
 
 private val centered = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
 
@@ -145,7 +150,7 @@ private fun Typography.withFamily(f: FontFamily): Typography = copy(
 )
 
 @Composable
-fun ObsiTheme(lang: Lang, content: @Composable () -> Unit) {
+fun ObsiTheme(lang: Lang, palette: ObsiPalette, content: @Composable () -> Unit) {
     // Vazirmatn covers Persian/Arabic and Latin, so one family gives the same look on every OS.
     val family = remember {
         FontFamily(
@@ -154,33 +159,6 @@ fun ObsiTheme(lang: Lang, content: @Composable () -> Unit) {
             Font(resource = "fonts/Vazirmatn-Bold.ttf", weight = FontWeight.Bold),
         )
     }
-    val scheme = if (Obsi.isLight) lightColorScheme(
-        primary = Obsi.orange, onPrimary = Obsi.onAccent,
-        primaryContainer = Obsi.accentLight.copy(alpha = 0.35f), onPrimaryContainer = Obsi.text,
-        secondary = Obsi.purple, onSecondary = Color.White,
-        secondaryContainer = Obsi.bg3, onSecondaryContainer = Obsi.text,
-        tertiary = Color(0xFF1F9D55),
-        background = Obsi.bg0, onBackground = Obsi.text,
-        surface = Obsi.bg1, onSurface = Obsi.text,
-        surfaceVariant = Obsi.bg2, onSurfaceVariant = Obsi.textDim,
-        surfaceContainer = Obsi.bg1, surfaceContainerHigh = Obsi.bg2, surfaceContainerHighest = Obsi.bg3,
-        surfaceContainerLow = Obsi.bg1, surfaceContainerLowest = Obsi.bg0,
-        outline = Obsi.line, outlineVariant = Obsi.line,
-        error = Color(0xFFC62828), onError = Color.White,
-    ) else darkColorScheme(
-        primary = Obsi.orange, onPrimary = Obsi.onAccent,
-        primaryContainer = Obsi.orangeDeep.copy(alpha = 0.55f), onPrimaryContainer = Obsi.text,
-        secondary = Obsi.purple, onSecondary = Color.White,
-        secondaryContainer = Color(0xFF3B2A6E), onSecondaryContainer = Color(0xFFE6DEFF),
-        tertiary = Obsi.green,
-        background = Obsi.bg0, onBackground = Obsi.text,
-        surface = Obsi.bg1, onSurface = Obsi.text,
-        surfaceVariant = Obsi.bg2, onSurfaceVariant = Obsi.textDim,
-        surfaceContainer = Obsi.bg1, surfaceContainerHigh = Obsi.bg2, surfaceContainerHighest = Obsi.bg3,
-        surfaceContainerLow = Obsi.bg1, surfaceContainerLowest = Obsi.bg0,
-        outline = Obsi.line, outlineVariant = Obsi.line,
-        error = Obsi.red, onError = Color(0xFF2B0000),
-    )
     val base = Typography()
     val typography = remember(family) {
         base.withFamily(family).copy(
@@ -189,7 +167,36 @@ fun ObsiTheme(lang: Lang, content: @Composable () -> Unit) {
             headlineSmall = base.headlineSmall.fit(family).copy(fontWeight = FontWeight.Bold, fontSize = 26.sp),
         )
     }
+    val scheme = if (palette.dark) darkColorScheme(
+        primary = palette.accent, onPrimary = palette.onAccent,
+        primaryContainer = palette.accentDeep, onPrimaryContainer = palette.accentSoft,
+        secondary = palette.secondary, onSecondary = Color.White,
+        secondaryContainer = palette.glassHigh, onSecondaryContainer = palette.text,
+        tertiary = palette.good,
+        background = palette.bg0, onBackground = palette.text,
+        surface = palette.glass, onSurface = palette.text,
+        surfaceVariant = palette.glassInput, onSurfaceVariant = palette.textDim,
+        surfaceContainer = palette.glass, surfaceContainerHigh = palette.glassHigh, surfaceContainerHighest = palette.glassHigh,
+        surfaceContainerLow = palette.glassLow, surfaceContainerLowest = palette.glassLow,
+        outline = palette.line, outlineVariant = palette.lineSoft,
+        error = palette.bad, onError = Color(0xFF2B0000),
+    ) else lightColorScheme(
+        primary = palette.accent, onPrimary = palette.onAccent,
+        primaryContainer = palette.accentSoft, onPrimaryContainer = palette.accentDeep,
+        secondary = palette.secondary, onSecondary = Color.White,
+        secondaryContainer = palette.glassHigh, onSecondaryContainer = palette.text,
+        tertiary = palette.good,
+        background = palette.bg0, onBackground = palette.text,
+        surface = palette.glass, onSurface = palette.text,
+        surfaceVariant = palette.glassInput, onSurfaceVariant = palette.textDim,
+        surfaceContainer = palette.glass, surfaceContainerHigh = palette.glassHigh, surfaceContainerHighest = palette.glassHigh,
+        surfaceContainerLow = palette.glassLow, surfaceContainerLowest = palette.glassLow,
+        outline = palette.line, outlineVariant = palette.lineSoft,
+        error = palette.bad, onError = Color.White,
+    )
     CompositionLocalProvider(LocalLayoutDirection provides if (lang.rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
-        MaterialTheme(colorScheme = scheme, typography = typography, content = content)
+        CompositionLocalProvider(LocalObsi provides palette) {
+            MaterialTheme(colorScheme = scheme, typography = typography, content = content)
+        }
     }
 }

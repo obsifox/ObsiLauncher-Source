@@ -4,7 +4,7 @@
 <p align="center">A multi-profile launcher for <b>Minecraft: Java Edition</b> with built-in Modrinth, for <b>Android</b>, <b>Windows</b> and <b>Linux</b>.</p>
 <p align="center"><a href="README.fa.md">فارسی</a></p>
 
-> Public repository · version `0.1.0` (MVP). *Not affiliated with Mojang AB or Microsoft.*
+> Public repository · version `1.2.0`. *Not affiliated with Mojang AB or Microsoft.* **Free for everyone — no access key, no locked features.**
 
 ## ⬇ Download
 
@@ -23,10 +23,11 @@ The builds are on the **[Releases → Nightly builds](https://github.com/obsifox
 | Based on | ZalithLauncher2 `2.6.1` (GPL-3.0), rebranded by an overlay | Written from scratch (Kotlin + Compose Multiplatform) |
 | Profiles (instances), each with its own mods/saves/settings | ✔ | ✔ |
 | Vanilla, Fabric, Quilt, Forge, NeoForge | ✔ | ✔ (auto-installed) |
-| Local (offline) accounts | ✔ | ✔ |
+| Microsoft account + offline account | ✔ | ✔ (device-code sign-in) |
 | Modrinth: search, install with dependencies, update check, `.mrpack` modpacks | ✔ | ✔ |
 | Java runtime | bundled | downloaded from Mojang automatically |
 | UI languages | EN + notice card in FA | **EN + FA (RTL, Vazirmatn font)** |
+| Glass-dark design with the version's official wallpaper (>=1.12.2 Wilderness Bound, older: Minecraft PC bundle, latest release: trailer video) and a theme that takes its colours from the wallpaper | ✔ | ✔ |
 | Extras | renderers, controls, … (upstream) | live game console, crash dialog, BMCLAPI mirror + proxy, per-profile memory/JVM args/resolution/auto-join |
 
 ## Screenshots
@@ -35,7 +36,6 @@ The builds are on the **[Releases → Nightly builds](https://github.com/obsifox
 |---|---|
 | ![Home](docs/assets/screens/home-en.png) | ![خانه](docs/assets/screens/home-fa.png) |
 | ![Modrinth](docs/assets/screens/modrinth-en.png) | ![مودها](docs/assets/screens/profile-mods-fa.png) |
-| ![Update gate](docs/assets/screens/gate-en.png) | ![ویزارد اولین اجرا](docs/assets/screens/wizard-fa.png) |
 
 ## Download
 
@@ -47,7 +47,7 @@ CI builds are published in the **[nightly release](../../releases/tag/nightly)**
 
 Install on Linux with `sudo apt install ./ObsiLauncher-<ver>-linux-x64.deb` (tested on Debian 13; the dependency list also accepts the older library names of Debian 12 / Ubuntu 22.04, which were not tested), or unpack the portable archive anywhere and run `ObsiLauncher/bin/ObsiLauncher`. On Windows run the `.msi`, or unzip the portable archive and start `ObsiLauncher.exe`.
 
-Run **Actions → Android / Desktop → Run workflow** to produce fresh ones. See [docs/SETUP.md](docs/SETUP.md) for the signing secrets.
+Run **Actions → Android / Desktop → Run workflow** to produce fresh ones. See [docs/SETUP.md](docs/SETUP.md) for the optional secrets (Microsoft sign-in needs your own Azure app ID).
 
 ## Repository layout
 
@@ -91,9 +91,9 @@ Offline unit tests cover resolver, rules, launch command, UUIDs, log parsing, ve
 
 **Not verified / limits**
 
-* **Accounts are local-only** (offline accounts, stored on the device); there is no Microsoft sign-in. The desktop app opens with an update gate and a one-time setup wizard; the launcher's background art follows the Minecraft version of the selected profile (official Mojang wallpaper packs, `pc_bundle` for versions older than 1.12.2).
+* **Microsoft login is disabled until you add `MS_CLIENT_ID` and Mojang approves it** ([docs/SETUP.md](docs/SETUP.md)); the device-code request was checked against Microsoft (errors are reported correctly) but a real sign-in could not be tested. Offline accounts work now.
 * **Windows** packages (`.msi`, portable `.zip`) are built by CI but were not run on a real Windows PC. The `.msi` is unsigned, so SmartScreen will warn.
 * **Android**: the APK builds, is correctly signed and its manifest/strings were inspected, but it was not installed on a device here.
 * **Quilt**: installs and starts its loader, but its first-run remap is so slow on the 2-core test box that a full start-up was not confirmed.
 * Account tokens are stored in `accounts.json` (owner-only permissions on Linux) like most launchers; OS keychain integration is future work.
-* Not yet: animated/video launcher backgrounds, skins, server list, instance export, macOS packaging, a full Persian translation of the Android app.
+* Not yet: CurseForge on desktop, skins, server list, instance export, macOS packaging, a full Persian translation of the Android app.

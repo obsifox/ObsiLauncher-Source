@@ -61,16 +61,21 @@ data class Settings(
     val javaPath: String? = null,
     val net: NetConfig = NetConfig(),
     val downloadThreads: Int = 16,
+    /** Azure application (client) id used for Microsoft sign-in. Empty = use the one baked into the build. */
+    val msClientId: String? = null,
     val hideLauncherWhileRunning: Boolean = false,
     val openConsoleOnLaunch: Boolean = true,
     val selectedAccountId: String? = null,
     val selectedInstanceId: String? = null,
-    /** Launcher look: "vanilla" | "white" | "black". */
-    val theme: String = "vanilla",
-    /** "version" = the official art of the selected profile's Minecraft version, "latest" = always the newest art, "custom" = the user's own image. */
-    val wallpaperMode: String = "version",
-    /** Tint the launcher UI with the colours of the wallpaper. */
-    val adaptColors: Boolean = true,
-    /** The first-run setup wizard has been completed or dismissed. */
-    val firstRunComplete: Boolean = false,
+    // ---- appearance / wallpapers -------------------------------------------------------
+    /** Overall theme surface: vanilla (warm dark glass) | white (ivory) | black (near-black). */
+    val themeMode: String = "vanilla",
+    /** Background source: auto (per version) | image (still wallpaper) | video (latest version only). */
+    val wallpaperMode: String = "auto",
+    /** Tint the whole UI with the accent colour extracted from the active wallpaper. */
+    val dynamicTint: Boolean = true,
+    /** Optional custom wallpaper image (absolute path). Empty = official pack. */
+    val wallpaperCustom: String? = null,
+    /** Play the version trailer with sound (muted by default). */
+    val wallpaperSound: Boolean = false,
 )

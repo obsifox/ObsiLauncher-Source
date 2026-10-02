@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -28,12 +27,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
+import studio.obsifox.launcher.core.auth.Account
 import studio.obsifox.launcher.core.instance.Instance
 import java.time.Instant
 import java.time.ZoneId
@@ -51,8 +50,8 @@ fun InstanceIcon(i: Instance, size: androidx.compose.ui.unit.Dp = 56.dp) {
 }
 
 /**
- * The immersive home: full-screen artwork of the selected profile's Minecraft version, navigation on top,
- * session facts at the bottom start edge and the launch action at the bottom end edge (mirrored in RTL).
+ * Home = the wallpaper itself is the screen (spec: "keep the cinematic scene open").
+ * Top: account + live status. Bottom-left: session strip. Bottom-right: big Play.
  */
 @Composable
 fun HomeScreen() {
@@ -61,187 +60,123 @@ fun HomeScreen() {
     val settings by app.core.settings.flow.collectAsState()
     val accounts by app.core.accounts.flow.collectAsState()
     val sessions by app.sessions.collectAsState()
-    val launching by app.launchingIds.collectAsState()
-    val offline by app.offlineMode.collectAsState()
-    val backdrop by app.backdrop.collectAsState()
+    val strings by app.strings.collectAsState()
+    val o = obsi()
 
     val selected = instances.firstOrNull { it.id == settings.selectedInstanceId } ?: instances.firstOrNull()
     val account = accounts.firstOrNull { it.id == settings.selectedAccountId } ?: accounts.firstOrNull()
-    val running = selected != null && sessions[selected.id]?.running?.value == true
-    val preparing = selected != null && selected.id in launching
+    val packLabel = LocalWallpaperPackLabel.current
 
-    Box(Modifier.fillMaxSize()) {
-        WallpaperLayer(app)
-        Column(Modifier.fillMaxSize().padding(22.dp)) {
-            HomeTopBar(app, account, selected)
-            Box(Modifier.weight(1f)) {
-                if (selected == null) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        GlassPanel(strong = true, radius = 22.dp) {
-                            Column(Modifier.padding(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(t("no_instance_title"), style = MaterialTheme.typography.titleLarge, color = Obsi.text)
-                                Dim(t("no_instance_text"), maxLines = 2)
-                                PrimaryButton(t("create_instance"), { app.go(Screen.Instances) }, icon = ObsiIcons.Add)
+    Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // ---------------------------------------------------------------- top row: account + background label
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AccountChip(account, accounts, app)
+            Box(Modifier.weight(1f))
+            Pill(packLabel.ifEmpty { "Wilderness Bound" }.let { if (settings.wallpaperMode == "video") "$it · VIDEO" else it }, o.accent)
+        }
+
+        // ---------------------------------------------------------------- hero (center-left)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            if (selected == null) {
+                ObsiCard(Modifier.width(560.dp), color = o.glassHigh) {
+                    Column(Modifier.padding(30.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FoxMark(34.dp, tint = o.accent)
+                            HSpace(12)
+                            Column {
+                                Text(t("home_title"), style = MaterialTheme.typography.headlineSmall, color = o.text)
+                                Dim(t("home_sub"))
+                            }
+                        }
+                        EmptyState(ObsiIcons.Apps, t("no_instance_title"), t("no_instance_text")) {
+                            PrimaryButton(t("create_instance"), { app.go(Screen.Instances) }, icon = ObsiIcons.Add)
+                        }
+                    }
+                }
+            } else {
+                val running = sessions[selected.id]?.running?.value == true
+                ObsiCard(Modifier.width(600.dp), color = o.glassHigh) {
+                    Column(Modifier.padding(26.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                            InstanceIcon(selected, 76.dp)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(selected.name, style = MaterialTheme.typography.titleLarge, color = o.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(selected.subtitle, color = o.accent, fontWeight = FontWeight.Medium)
+                                Dim(lastPlayedText(selected) + if (selected.playTimeSeconds > 0) "  ·  " + tf("play_time", strings.duration(selected.playTimeSeconds)) else "")
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            if (running) {
+                                SoftButton(t("stop"), { app.stop(selected.id) }, icon = ObsiIcons.Stop, danger = true)
+                                PrimaryButton(t("nav_console"), { app.go(Screen.Console) }, icon = ObsiIcons.Terminal)
+                            } else {
+                                PrimaryButton(t("play"), { app.play(selected) }, icon = ObsiIcons.Play)
+                                SoftButton(t("nav_instances"), { app.go(Screen.Instances) }, icon = ObsiIcons.Apps)
                             }
                         }
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                StatsPanel(selected)
-                Box(Modifier.weight(1f))
-                LaunchZone(app, selected, running, preparing, offline, backdrop.loading)
-            }
-            TaskBar(app)
         }
-    }
-}
 
-@Composable
-private fun HomeTopBar(app: AppController, account: studio.obsifox.launcher.core.auth.Account?, selected: Instance?) {
-    val instances by app.core.instances.flow.collectAsState()
-    val accounts by app.core.accounts.flow.collectAsState()
-    var profilesOpen by remember { mutableStateOf(false) }
-    var versionsOpen by remember { mutableStateOf(false) }
-
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        GlassPanel(Modifier.weight(1f, fill = false)) {
-            Row(Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                // profile first
-                Box {
-                    Row(
-                        Modifier.padding(4.dp).clip(RoundedCornerShape(11.dp)).clickable { profilesOpen = true }.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        LetterAvatar(account?.username ?: "?", 34.dp, shape = RoundedCornerShape(9.dp))
-                        Column {
-                            Text(account?.username ?: t("no_account"), color = Obsi.text, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(t("account_offline"), color = Obsi.textDim, fontSize = 8.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
-                        }
-                        Icon(ObsiIcons.ArrowDown, null, tint = Obsi.textDim, modifier = Modifier.size(13.dp))
-                    }
-                    DropdownMenu(expanded = profilesOpen, onDismissRequest = { profilesOpen = false }) {
-                        accounts.forEach { a -> DropdownMenuItem(text = { Text(a.username) }, onClick = { app.selectAccount(a.id); profilesOpen = false }) }
-                        DropdownMenuItem(text = { Text(t("add_offline")) }, onClick = { profilesOpen = false; app.go(Screen.Accounts) })
-                    }
+        // ---------------------------------------------------------------- bottom: session strip + play
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            ObsiCard(Modifier.weight(1f).height(58.dp), color = o.glassLow) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Box(Modifier.size(9.dp).clip(RoundedCornerShape(50)).background(if (sessions.isNotEmpty()) o.good else o.accent))
+                    Text(
+                        selected?.let { "${it.subtitle}  ·  ${tf("play_time", strings.duration(it.playTimeSeconds))}" } ?: t("no_instance_title"),
+                        color = o.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        selected?.let { lastPlayedText(it) } ?: "",
+                        color = o.textDim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
                 }
-                Sep()
-                NavIconButton(ObsiIcons.Play, t("play"), enabled = selected != null) { selected?.let(app::play) }
-                // version selector = profile selector, the wallpaper follows it
-                Box {
-                    Row(
-                        Modifier.padding(4.dp).clip(RoundedCornerShape(11.dp)).clickable { versionsOpen = true }.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(ObsiIcons.Cube, null, tint = Obsi.accentLight, modifier = Modifier.size(15.dp))
-                        Text(selected?.subtitle ?: "—", color = Obsi.text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        Icon(ObsiIcons.ArrowDown, null, tint = Obsi.textDim, modifier = Modifier.size(12.dp))
-                    }
-                    DropdownMenu(expanded = versionsOpen, onDismissRequest = { versionsOpen = false }) {
-                        instances.forEach { i ->
-                            DropdownMenuItem(text = { Column { Text(i.name); Text(i.subtitle, color = Obsi.textDim, fontSize = 10.sp) } },
-                                onClick = { app.selectInstance(i.id); versionsOpen = false })
-                        }
-                        DropdownMenuItem(text = { Text(t("create_instance")) }, onClick = { versionsOpen = false; app.go(Screen.Instances) })
-                    }
-                }
-                NavIconButton(ObsiIcons.Extension, t("nav_instances")) { app.go(selected?.let { Screen.InstanceDetail(it.id, 0) } ?: Screen.Instances) }
-                NavIconButton(ObsiIcons.Settings, t("nav_settings")) { app.go(Screen.Settings) }
             }
-        }
-        GlassPanel {
-            Row(Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                LanguageSwitch()
-                NavIconButton(ObsiIcons.Fullscreen, t("fs_toggle")) { app.fullscreen.value = !app.fullscreen.value }
-                Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    FoxMark(24.dp)
-                    Text("ObsiLauncher", color = Obsi.textDim, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            if (selected != null) {
+                val running = sessions[selected.id]?.running?.value == true
+                if (running) {
+                    PrimaryButton(t("stop"), { app.stop(selected.id) }, icon = ObsiIcons.Stop)
+                } else {
+                    PrimaryButton(t("play"), { app.play(selected) }, icon = ObsiIcons.Play, modifier = Modifier.height(58.dp))
                 }
             }
         }
     }
 }
 
-
-
 @Composable
-private fun Sep() = Box(Modifier.width(1.dp).height(24.dp).background(Obsi.soft))
-
-@Composable
-private fun NavIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, tip: String, enabled: Boolean = true, onClick: () -> Unit) {
-    Box(Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).clickable(onClick = onClick, enabled = enabled), contentAlignment = Alignment.Center) {
-        Icon(icon, tip, tint = Obsi.accentLight, modifier = Modifier.size(16.dp))
-    }
-}
-
-@Composable
-private fun StatsPanel(selected: Instance?) {
-    val strings = LocalStrings.current
-    GlassPanel {
-        Row(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(26.dp), verticalAlignment = Alignment.CenterVertically) {
-            Stat(ObsiIcons.Cube, t("stat_install"), selected?.subtitle ?: "—")
-            Stat(ObsiIcons.Clock, t("stat_playtime"), if ((selected?.playTimeSeconds ?: 0) > 0) strings.duration(selected!!.playTimeSeconds) else "—")
-            Stat(ObsiIcons.Calendar, t("stat_last"), selected?.let { lastPlayedText(it) } ?: "—")
-        }
-    }
-}
-
-@Composable
-private fun Stat(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(icon, null, tint = Obsi.accentLight, modifier = Modifier.size(24.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(label, color = Obsi.textDim, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-            Text(value, color = Obsi.text, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun LaunchZone(app: AppController, selected: Instance?, running: Boolean, preparing: Boolean, offline: Boolean, artLoading: Boolean) {
-    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        if (artLoading) Dim(t("art_loading"), size = 10)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            val led = when { running -> Obsi.green; preparing -> Obsi.orange; offline -> Color(0xFFC4A06E); else -> Color(0xFFB8D89A) }
-            Box(Modifier.size(6.dp).background(led, CircleShape))
-            Text(
-                when {
-                    offline -> t("offline_status")
-                    preparing -> t("loading")
-                    else -> t("ready_status")
-                },
-                color = Obsi.text.copy(alpha = 0.8f), fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp,
-            )
-        }
-        if (running && selected != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SoftButton(t("stop"), { app.stop(selected.id) }, icon = ObsiIcons.Stop, danger = true)
-                PrimaryButton(t("nav_console"), { app.go(Screen.Console) }, icon = ObsiIcons.Terminal)
+private fun AccountChip(account: Account?, all: List<Account>, app: AppController) {
+    val o = obsi()
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier.clip(RoundedCornerShape(14.dp)).background(o.glass).clickable { if (all.isEmpty()) app.go(Screen.Accounts) else open = true }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (account != null) {
+                LetterAvatar(account.username, 30.dp)
+                Column {
+                    Dim(t("playing_as"), size = 11)
+                    Text(account.username, color = o.text, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                }
+                Pill(if (account.isMicrosoft) t("account_ms") else t("account_offline"), if (account.isMicrosoft) o.good else o.warn)
+            } else {
+                Icon(ObsiIcons.Person, null, tint = o.textDim)
+                Text(t("no_account"), color = o.textDim)
             }
-        } else {
-            PlayButton(enabled = selected != null && !preparing) { selected?.let(app::play) }
         }
-    }
-}
-
-@Composable
-private fun PlayButton(enabled: Boolean, onClick: () -> Unit) {
-    val selected by LocalApp.current.core.instances.flow.collectAsState()
-    val settings by LocalApp.current.core.settings.flow.collectAsState()
-    val inst = selected.firstOrNull { it.id == settings.selectedInstanceId } ?: selected.firstOrNull()
-    Box(
-        Modifier.width(330.dp).height(104.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(Brush.linearGradient(listOf(Obsi.orange, Obsi.orangeDeep)))
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(17.dp)).background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent))), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(t("play"), color = Obsi.onAccent, fontSize = 34.sp, fontWeight = FontWeight.Black, letterSpacing = 6.sp)
-                Text(inst?.subtitle ?: "", color = Obsi.onAccent.copy(alpha = 0.85f), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = o.glassHigh) {
+            all.forEach { a ->
+                DropdownMenuItem(text = { Text(a.username, color = o.text) }, onClick = { app.selectAccount(a.id); open = false })
             }
+            DropdownMenuItem(text = { Text(t("nav_accounts"), color = o.text) }, onClick = { open = false; app.go(Screen.Accounts) })
         }
     }
 }
