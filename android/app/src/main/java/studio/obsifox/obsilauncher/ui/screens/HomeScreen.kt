@@ -1,6 +1,7 @@
 package studio.obsifox.obsilauncher.ui.screens
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,11 +23,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import studio.obsifox.obsilauncher.R
 import studio.obsifox.obsilauncher.app
-import studio.obsifox.obsilauncher.core.accounts.AccountStore
 import studio.obsifox.obsilauncher.core.game.GameState
+import studio.obsifox.obsilauncher.core.instance.Instance
 import studio.obsifox.obsilauncher.ui.components.GlassCard
 import studio.obsifox.obsilauncher.ui.components.ObsiButton
 import studio.obsifox.obsilauncher.ui.components.ObsiGhostButton
+import studio.obsifox.obsilauncher.ui.components.ObsiTextButton
+import studio.obsifox.obsilauncher.ui.components.SectionTitle
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
 @Composable
@@ -34,24 +37,27 @@ fun HomeScreen(
     onPlay: () -> Unit,
     onPickVersion: () -> Unit,
     onPickAccount: () -> Unit,
+    onOpenConsole: () -> Unit,
+    onOpenInstance: () -> Unit,
+    onOpenBrowse: () -> Unit,
 ) {
     val context = LocalContext.current
     val app = context.app
     val obsi = LocalObsi.current
 
-    val selected by app.settings.selectedVersion.collectAsState()
+    val instances by app.instances.instances.collectAsState()
+    val activeId by app.instances.activeId.collectAsState()
     val accounts by app.accounts.accounts.collectAsState()
-    val activeAccount by app.accounts.activeId.collectAsState()
+    val activeAccountId by app.accounts.activeId.collectAsState()
     val packs by app.runtimePacks.packs.collectAsState()
     val runtimePack by app.settings.runtimePack.collectAsState()
     val gameState by app.gameManager.state.collectAsState()
     val installing by app.installer.state.collectAsState()
 
-    val hasVersion = selected.isNotBlank() && app.installer.isInstalled(selected)
-    val account = accounts.firstOrNull { it.id == activeAccount }
-    val pack = packs.firstOrNull { it.name == runtimePack }
-
-    val pulse by animateFloatAsState(if (gameState == GameState.RUNNING) 1f else 0.85f, label = "pulse")
+    val active = instances.firstOrNull { it.id == activeId }
+    val account = accounts.firstOrNull { it.id == activeAccountId }
+    val pack = packs.firstOrNull { it.name == runtimePack } ?: packs.firstOrNull()
+    val hasVersion = active != null && app.installer.isInstalled(active.versionId)
 
     Column(
         modifier = Modifier
@@ -63,8 +69,8 @@ fun HomeScreen(
             Text(
                 text = when {
                     gameState == GameState.RUNNING -> stringResourceCompat(R.string.console_running)
-                    gameState == GameState.PREPARING -> stringResourceCompat(R.string.home_launching, selected)
-                    hasVersion -> stringResourceCompat(R.string.home_version_ready, selected)
+                    gameState == GameState.PREPARING -> stringResourceCompat(R.string.home_launching, active?.name ?: "")
+                    hasVersion -> stringResourceCompat(R.string.home_version_ready, active?.name ?: "")
                     else -> stringResourceCompat(R.string.home_no_version)
                 },
                 style = MaterialTheme.typography.titleMedium,
@@ -72,10 +78,18 @@ fun HomeScreen(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = selected.ifBlank { "—" },
+                text = active?.name ?: "—",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
             )
+            if (active != null) {
+                Text(
+                    text = loaderBadge(active),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = obsi.accent,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
             Spacer(Modifier.height(18.dp))
 
             val canPlay = hasVersion && account != null && pack != null &&
@@ -98,6 +112,30 @@ fun HomeScreen(
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = obsi.textDim,
+                )
+            }
+            if (gameState == GameState.RUNNING || gameState == GameState.EXITED) {
+                ObsiTextButton(stringResourceCompat(R.string.console_title), onClick = onOpenConsole)
+            }
+        }
+
+        // instance switcher -----------------------------------------------------
+        SectionTitle(stringResourceCompat(R.string.home_instances))
+        if (instances.isEmpty()) {
+            GlassCard {
+                Text(stringResourceCompat(R.string.home_no_instances), color = obsi.textDim)
+                ObsiGhostButton(stringResourceCompat(R.string.versions_install), onClick = onPickVersion, modifier = Modifier.padding(top = 8.dp))
+            }
+        } else {
+            instances.forEach { instance ->
+                InstanceChip(
+                    instance = instance,
+                    selected = instance.id == activeId,
+                    onSelect = {
+                        app.instances.setActive(instance.id)
+                        app.settings.selectedVersionValue = instance.versionId
+                    },
+                    onDetail = onOpenInstance,
                 )
             }
         }
@@ -128,19 +166,19 @@ fun HomeScreen(
             }
             GlassCard(modifier = Modifier.weight(1f)) {
                 Text(
-                    stringResourceCompat(R.string.nav_versions),
+                    stringResourceCompat(R.string.nav_browse),
                     style = MaterialTheme.typography.labelMedium,
                     color = obsi.textDim,
                 )
                 Text(
-                    "${app.installer.installed().size}",
+                    "Modrinth",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(8.dp))
                 ObsiGhostButton(
-                    text = stringResourceCompat(R.string.versions_select),
-                    onClick = onPickVersion,
+                    text = stringResourceCompat(R.string.browse_open),
+                    onClick = onOpenBrowse,
                 )
             }
         }
@@ -153,4 +191,36 @@ fun HomeScreen(
             )
         }
     }
+}
+
+@Composable
+private fun InstanceChip(instance: Instance, selected: Boolean, onSelect: () -> Unit, onDetail: () -> Unit) {
+    val obsi = LocalObsi.current
+    GlassCard(modifier = Modifier.padding(bottom = 10.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { onSelect() },
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    instance.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (selected) obsi.accent else obsi.text,
+                )
+                Text(
+                    loaderBadge(instance),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = obsi.textDim,
+                )
+            }
+            ObsiTextButton(stringResourceCompat(R.string.instance_details), onClick = onDetail)
+        }
+    }
+}
+
+internal fun loaderBadge(instance: Instance): String = when (instance.loaderType.name) {
+    "VANILLA" -> instance.mcVersion
+    else -> "${instance.mcVersion} · ${instance.loaderType.display}" +
+        (instance.loaderVersion?.let { " $it" } ?: "")
 }

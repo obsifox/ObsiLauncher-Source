@@ -8,6 +8,8 @@ import kotlinx.coroutines.withContext
 import studio.obsifox.obsilauncher.core.ObsiSettings
 import studio.obsifox.obsilauncher.core.Paths
 import studio.obsifox.obsilauncher.core.accounts.Account
+import studio.obsifox.obsilauncher.core.cosmetics.SkinManager
+import studio.obsifox.obsilauncher.core.instance.Instance
 import studio.obsifox.obsilauncher.core.jni.ObsiBridge
 import studio.obsifox.obsilauncher.core.runtime.Pack
 import java.io.File
@@ -28,21 +30,27 @@ class GameManager(private val settings: ObsiSettings) {
     @Volatile
     private var logThreadActive = false
 
-    fun launch(context: Context, versionId: String, account: Account, pack: Pack) {
+    fun launch(context: Context, instance: Instance, account: Account, pack: Pack) {
         if (state.value == GameState.RUNNING || state.value == GameState.PREPARING) return
         state.value = GameState.PREPARING
         exitCode.value = null
         log.value = ""
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
+                // local-only custom skin/cape goes into the game dir before start
+                val gameDir = Paths.versionDir(context, instance.versionId)
+                val skinWarning = SkinManager.applyToGameDir(context, account, gameDir)
+                skinWarning?.let { appendLog("!! ObsiLauncher: $it\n") }
+
+                val jvmArgs = instance.javaArgs.ifEmpty { settings.javaArgsValue }
                 val req = LaunchPipeline.Request(
-                    versionId = versionId,
+                    instance = instance,
                     account = account,
                     pack = pack,
-                    memoryMb = settings.memoryMbValue,
-                    extraJvmArgs = settings.javaArgsValue.split(" ").map { it.trim() }.filter { it.isNotEmpty() },
+                    memoryMb = instance.memoryMb.takeIf { it > 0 } ?: settings.memoryMbValue,
+                    extraJvmArgs = jvmArgs.split(" ").map { it.trim() }.filter { it.isNotEmpty() },
                 )
-                ObsiBridge.chdir(Paths.versionDir(context, versionId).absolutePath)
+                ObsiBridge.chdir(gameDir.absolutePath)
                 val pid = LaunchPipeline.spawn(context, req)
                 if (pid <= 0) {
                     state.value = GameState.EXITED
@@ -50,7 +58,7 @@ class GameManager(private val settings: ObsiSettings) {
                     appendLog("!! ObsiLauncher: fork/exec failed — check the runtime pack (${pack.launcherSo.path})\n")
                     return@launch
                 }
-                running.value = Running(versionId, pid)
+                running.value = Running(instance.versionId, pid)
                 state.value = GameState.RUNNING
                 startLogReader()
                 val code = ObsiBridge.waitPid(pid)

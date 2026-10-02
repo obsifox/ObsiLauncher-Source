@@ -3,9 +3,13 @@ package studio.obsifox.obsilauncher
 import android.app.Application
 import studio.obsifox.obsilauncher.core.ObsiSettings
 import studio.obsifox.obsilauncher.core.accounts.AccountStore
+import studio.obsifox.obsilauncher.core.auth.MicrosoftAuth
 import studio.obsifox.obsilauncher.core.game.GameManager
 import studio.obsifox.obsilauncher.core.game.VersionInstaller
 import studio.obsifox.obsilauncher.core.game.VersionManifest
+import studio.obsifox.obsilauncher.core.instance.InstancesStore
+import studio.obsifox.obsilauncher.core.loaders.LoaderService
+import studio.obsifox.obsilauncher.core.modrinth.ModrinthInstaller
 import studio.obsifox.obsilauncher.core.runtime.RuntimePacks
 import studio.obsifox.obsilauncher.obsi.ObsiWallpaper
 
@@ -27,6 +31,14 @@ class App : Application() {
         private set
     lateinit var runtimePacks: RuntimePacks
         private set
+    lateinit var instances: InstancesStore
+        private set
+    lateinit var loaders: LoaderService
+        private set
+    lateinit var modrinth: ModrinthInstaller
+        private set
+    lateinit var microsoft: MicrosoftAuth
+        private set
 
     val gameManager: GameManager by lazy { GameManager(settings) }
 
@@ -38,6 +50,10 @@ class App : Application() {
         manifest = VersionManifest(this)
         installer = VersionInstaller(this)
         runtimePacks = RuntimePacks(this)
+        instances = InstancesStore(this, settings)
+        loaders = LoaderService(this)
+        modrinth = ModrinthInstaller(this)
+        microsoft = MicrosoftAuth()
     }
 }
 

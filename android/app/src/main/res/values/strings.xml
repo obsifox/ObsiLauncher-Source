@@ -3,18 +3,21 @@
     <string name="app_name">Obsi Launcher</string>
     <string name="nav_home">Home</string>
     <string name="nav_versions">Versions</string>
+    <string name="nav_browse">Mods</string>
     <string name="nav_accounts">Accounts</string>
     <string name="nav_console">Console</string>
     <string name="nav_settings">Settings</string>
     <string name="nav_about">About</string>
 
     <string name="home_play">Play</string>
-    <string name="home_no_version">No version selected — pick one in Versions</string>
+    <string name="home_no_version">No instance selected — pick a version in Versions</string>
     <string name="home_no_account">No account — add an offline profile in Accounts</string>
     <string name="home_version_ready">%1$s is ready to play</string>
     <string name="home_missing_runtime">Runtime pack missing — install it from Settings → Runtime</string>
     <string name="home_wallpaper_note">Background artwork for the selected version is fetched from minecraft.net</string>
     <string name="home_launching">Starting %1$s…</string>
+    <string name="home_instances">Instances</string>
+    <string name="home_no_instances">No instances yet — install a version to create one</string>
 
     <string name="versions_installed">Installed</string>
     <string name="versions_releases">Releases</string>
@@ -28,6 +31,13 @@
     <string name="versions_empty_installed">Nothing installed yet</string>
     <string name="versions_old_hint">Old-beta and old-alpha versions are included below</string>
 
+    <string name="loader_pick_title">Add a loader to %1$s?</string>
+    <string name="loader_pick_hint">The instance will be created with the chosen loader. OptiFine patches the client; Forge and NeoForge run their official installer.</string>
+    <string name="loader_version_title">Choose a %1$s version for %2$s</string>
+    <string name="loader_none">No versions available for this Minecraft release</string>
+    <string name="loader_recommended">Recommended</string>
+    <string name="loader_unstable">Unstable</string>
+
     <string name="accounts_title">Player profiles</string>
     <string name="accounts_offline_hint">Offline profile — the player name is what other players see. Free, no Microsoft account needed.</string>
     <string name="accounts_add">Add offline profile</string>
@@ -36,6 +46,23 @@
     <string name="accounts_set_active">Set active</string>
     <string name="accounts_remove">Remove</string>
     <string name="accounts_empty">No profiles yet</string>
+    <string name="accounts_microsoft">Sign in with Microsoft</string>
+    <string name="accounts_type_microsoft">Microsoft account (free device-code login)</string>
+    <string name="accounts_msa_step1">Open this page and sign in:</string>
+    <string name="accounts_msa_step2">Then enter this code:</string>
+    <string name="accounts_msa_waiting">Waiting for confirmation…</string>
+
+    <string name="skins_title">Custom skin &amp; cape (local only)</string>
+    <string name="skins_hint">Your skin/cape is applied client-side: only you see it in game. Requires CustomSkinLoader in the instance — search “CustomSkinLoader” in Mods.</string>
+    <string name="skins_pick_skin">Pick skin PNG</string>
+    <string name="skins_clear_skin">Clear skin</string>
+    <string name="skins_pick_cape">Pick cape PNG</string>
+    <string name="skins_clear_cape">Clear cape</string>
+    <string name="skins_model">Model</string>
+    <string name="skins_model_classic">Classic</string>
+    <string name="skins_model_slim">Slim</string>
+    <string name="skins_local_toggle">Apply locally</string>
+    <string name="skins_local_hint">Enabled only for this device — other players keep seeing the default skin</string>
 
     <string name="settings_appearance">Appearance</string>
     <string name="settings_theme_dynamic">Obsi Dynamic (colours from wallpaper)</string>
@@ -47,6 +74,10 @@
     <string name="settings_custom_wallpaper_hint">Pick any image — it overrides version wallpapers until cleared</string>
     <string name="settings_pick_image">Pick image</string>
     <string name="settings_clear_image">Clear</string>
+    <string name="settings_language">Language</string>
+    <string name="lang_system">System default</string>
+    <string name="lang_en">English</string>
+    <string name="lang_fa">فارسی</string>
 
     <string name="settings_launcher">Launcher</string>
     <string name="settings_memory">Memory for the game (MB)</string>
@@ -54,7 +85,7 @@
     <string name="settings_show_logs">Console</string>
 
     <string name="settings_runtime">Runtime</string>
-    <string name="settings_runtime_hint">ObsiLauncher runs the game through a runtime pack: a JVM for Android plus LWJGL/MobileGlues natives, packaged as a .tar.xz with a pack.json. Install one per architecture.</string>
+    <string name="settings_runtime_hint">ObsiLauncher runs the game through a runtime pack: a JVM for Android plus LWJGL/MobileGlues natives, packaged as a .tar.xz with a pack.json. Install one per architecture. The pack JVM also runs Forge/NeoForge installers and the OptiFine patcher.</string>
     <string name="settings_runtime_url">Runtime pack URL (.tar.xz)</string>
     <string name="settings_runtime_install">Download &amp; install</string>
     <string name="settings_runtime_none">No runtime pack installed</string>
@@ -67,7 +98,7 @@
     <string name="about_license">GPL-3.0-or-later · unofficial, not affiliated with Mojang or Microsoft</string>
     <string name="about_version">Version %1$s</string>
 
-    <string name="console_title">Game console</string>
+    <string name="console_title">Console</string>
     <string name="console_empty">The game log appears here after launch</string>
     <string name="console_stop">Stop game</string>
     <string name="console_running">Running</string>
@@ -80,10 +111,66 @@
     <string name="dl_step_libraries">Downloading libraries… (%1$d/%2$d)</string>
     <string name="dl_step_natives">Extracting native libraries…</string>
     <string name="dl_step_assets">Downloading assets… (%1$d/%2$d)</string>
+    <string name="dl_step_loader_profile">Fetching loader profile…</string>
+    <string name="dl_step_loader_installer">Running the loader installer…</string>
+    <string name="dl_step_loader_output">Installer is working…</string>
+    <string name="dl_step_modpack_index">Reading modpack index…</string>
+    <string name="dl_step_modpack_files">Downloading modpack files… (%1$d/%2$d)</string>
+    <string name="dl_step_verify">Verifying files…</string>
+    <string name="dl_step_repair_client">Repairing client jar…</string>
+    <string name="dl_step_repair_libraries">Repairing libraries…</string>
     <string name="dl_done">Installed %1$s</string>
     <string name="dl_failed">Failed: %1$s</string>
     <string name="dl_retry">Retry</string>
     <string name="dl_cancel">Cancel</string>
+
+    <string name="browse_open">Browse</string>
+    <string name="browse_mods">Mods</string>
+    <string name="browse_modpacks">Modpacks</string>
+    <string name="browse_resourcepacks">Resource packs</string>
+    <string name="browse_shaders">Shaders</string>
+    <string name="browse_search_hint">Search Modrinth…</string>
+    <string name="browse_search">Search</string>
+    <string name="browse_import_mrpack">Import .mrpack</string>
+    <string name="browse_target">Installing into %1$s (%2$s)</string>
+    <string name="browse_no_instance">Create an instance first — Versions → Install</string>
+    <string name="browse_results">Results</string>
+    <string name="browse_empty">Nothing found</string>
+    <string name="browse_versions">Versions</string>
+    <string name="browse_no_compatible">No versions compatible with this instance</string>
+    <string name="browse_modpack_done">Modpack installed — the new instance is selected</string>
+
+    <string name="deps_title">Dependencies · %1$s</string>
+    <string name="deps_hint">Before installing %1$s, check what else it needs. Required dependencies are locked; untick anything optional you do not want.</string>
+    <string name="deps_none">This project has no extra dependencies</string>
+    <string name="deps_required">required</string>
+    <string name="deps_optional">optional</string>
+    <string name="deps_installed">already installed</string>
+    <string name="deps_required_by">required by %1$s</string>
+    <string name="deps_install">Install</string>
+
+    <string name="instance_details">Manage</string>
+    <string name="instance_tab_content">Content</string>
+    <string name="instance_tab_settings">Settings</string>
+    <string name="instance_custom">Custom instance</string>
+    <string name="instance_name">Instance name</string>
+    <string name="instance_saved">Saved</string>
+    <string name="instance_game">Game settings</string>
+    <string name="instance_custom_memory">Custom memory</string>
+    <string name="instance_custom_args">Custom JVM arguments</string>
+    <string name="instance_files">Game files</string>
+    <string name="instance_repair_hint">Verify every file (client, libraries, assets) and re-download anything missing or corrupt.</string>
+    <string name="instance_repair">Fix &amp; repair</string>
+    <string name="instance_repair_done">All files verified and fixed</string>
+
+    <string name="content_check_updates">Check updates</string>
+    <string name="content_updates_done">%1$d mod(s) updated</string>
+    <string name="content_empty_mods">No mods installed in this instance</string>
+    <string name="content_empty_rp">No resource packs installed</string>
+    <string name="content_empty_shaders">No shader packs installed</string>
+    <string name="content_empty_hint">Install them from the Mods tab (Modrinth)</string>
+    <string name="content_required_by">required by %1$s</string>
+    <string name="content_locked_info">%1$s cannot be deleted: other installed content depends on it. Disable or delete that content first.</string>
 
     <string name="err_no_network">No network connection</string>
     <string name="err_generic">Something went wrong: %1$s</string>

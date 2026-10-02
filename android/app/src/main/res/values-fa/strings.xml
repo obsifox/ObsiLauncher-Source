@@ -3,18 +3,21 @@
     <string name="app_name">ابسی لانچر</string>
     <string name="nav_home">خانه</string>
     <string name="nav_versions">نسخه‌ها</string>
+    <string name="nav_browse">مادها</string>
     <string name="nav_accounts">حساب‌ها</string>
     <string name="nav_console">کنسول</string>
     <string name="nav_settings">تنظیمات</string>
     <string name="nav_about">درباره</string>
 
     <string name="home_play">بازی کن</string>
-    <string name="home_no_version">نسخه‌ای انتخاب نشده — از بخش نسخه‌ها انتخاب کنید</string>
+    <string name="home_no_version">هنوز اینستنس انتخاب نشده — از بخش نسخه‌ها یکی بسازید</string>
     <string name="home_no_account">حسابی نیست — در بخش حساب‌ها یک پروفایل بسازید</string>
     <string name="home_version_ready">‏%1$s آماده‌ی بازی است</string>
     <string name="home_missing_runtime">پک ران‌تایم نصب نیست — از تنظیمات ← ران‌تایم نصبش کنید</string>
     <string name="home_wallpaper_note">پس‌زمینه‌ی نسخه‌ی انتخاب‌شده از minecraft.net دریافت می‌شود</string>
     <string name="home_launching">در حال اجرای %1$s…</string>
+    <string name="home_instances">اینستنس‌ها</string>
+    <string name="home_no_instances">هنوز اینستنسی نیست — برای ساخت، یک نسخه نصب کنید</string>
 
     <string name="versions_installed">نصب‌شده</string>
     <string name="versions_releases">پایدار</string>
@@ -28,25 +31,53 @@
     <string name="versions_empty_installed">هنوز چیزی نصب نشده</string>
     <string name="versions_old_hint">نسخه‌های old-beta و old-alpha هم در ادامه هستند</string>
 
+    <string name="loader_pick_title">برای %1$s لودر اضافه شود؟</string>
+    <string name="loader_pick_hint">اینستنس با لودر انتخابی ساخته می‌شود. OptiFine کلاینت را پچ می‌کند؛ Forge و NeoForge نصب‌کننده‌ی رسمی خودشان را اجرا می‌کنند.</string>
+    <string name="loader_version_title">انتخاب نسخه‌ی %1$s برای %2$s</string>
+    <string name="loader_none">برای این نسخه‌ی ماینکرفت، لودری موجود نیست</string>
+    <string name="loader_recommended">پیشنهادی</string>
+    <string name="loader_unstable">ناپایدار</string>
+
     <string name="accounts_title">پروفایل‌های بازیکن</string>
-    <string name="accounts_offline_hint">پروفایل آفلاین — نامی که بقیه‌ی بازیکنان می‌بینند. رایگان و بدون نیاز به حساب مایکروسافت.</string>
+    <string name="accounts_offline_hint">پروفایل آفلاین — اسم بازیکن همان چیزی است که بقیه می‌بینند. رایگان، بدون نیاز به حساب مایکروسافت.</string>
     <string name="accounts_add">افزودن پروفایل آفلاین</string>
     <string name="accounts_name_hint">نام بازیکن</string>
     <string name="accounts_active">فعال</string>
     <string name="accounts_set_active">فعال‌سازی</string>
     <string name="accounts_remove">حذف</string>
     <string name="accounts_empty">هنوز پروفایلی نیست</string>
+    <string name="accounts_microsoft">ورود با مایکروسافت</string>
+    <string name="accounts_type_microsoft">حساب مایکروسافت (ورود رایگان با device-code)</string>
+    <string name="accounts_msa_step1">این صفحه را باز کنید و وارد شوید:</string>
+    <string name="accounts_msa_step2">سپس این کد را وارد کنید:</string>
+    <string name="accounts_msa_waiting">در انتظار تأیید…</string>
+
+    <string name="skins_title">اسکین و کیپ دلخواه (فقط محلی)</string>
+    <string name="skins_hint">اسکین/کیپ فقط برای خودتان در بازی نمایش داده می‌شود. برای اینستنس، CustomSkinLoader لازم است — در تب مادها جستجو کنید.</string>
+    <string name="skins_pick_skin">انتخاب اسکین (PNG)</string>
+    <string name="skins_clear_skin">برداشتن اسکین</string>
+    <string name="skins_pick_cape">انتخاب کیپ (PNG)</string>
+    <string name="skins_clear_cape">برداشتن کیپ</string>
+    <string name="skins_model">مدل</string>
+    <string name="skins_model_classic">کلاسیک</string>
+    <string name="skins_model_slim">اسلیم</string>
+    <string name="skins_local_toggle">اعمال فقط روی همین دستگاه</string>
+    <string name="skins_local_hint">بقیه‌ی بازیکن‌ها اسکین پیش‌فرض را می‌بینند — هیچ چیزی برای دیگران تغییر نمی‌کند</string>
 
     <string name="settings_appearance">ظاهر</string>
-    <string name="settings_theme_dynamic">ابسی داینامیک (رنگ از پس‌زمینه)</string>
+    <string name="settings_theme_dynamic">ابسی داینامیک (رنگ از والپیپر)</string>
     <string name="settings_theme_obsidian">روباه ابسیدین</string>
-    <string name="settings_theme_vanilla">سبز ونیلا</string>
-    <string name="settings_theme_white">سفید کریستالی</string>
-    <string name="settings_blur">محو شدن پس‌زمینه</string>
+    <string name="settings_theme_vanilla">سبز وانیلا</string>
+    <string name="settings_theme_white">کریستال سفید</string>
+    <string name="settings_blur">محو کردن پس‌زمینه</string>
     <string name="settings_custom_wallpaper">پس‌زمینه‌ی دلخواه</string>
-    <string name="settings_custom_wallpaper_hint">هر تصویری انتخاب کنید — تا زمان پاک‌کردن، جایگزین کاغذدیواری نسخه‌ها می‌شود</string>
-    <string name="settings_pick_image">انتخاب تصویر</string>
-    <string name="settings_clear_image">پاک‌کردن</string>
+    <string name="settings_custom_wallpaper_hint">هر عکسی انتخاب کنید — تا وقتی پاک نشود جای والپیپر نسخه‌ها را می‌گیرد</string>
+    <string name="settings_pick_image">انتخاب عکس</string>
+    <string name="settings_clear_image">پاک کردن</string>
+    <string name="settings_language">زبان</string>
+    <string name="lang_system">پیش‌فرض سیستم</string>
+    <string name="lang_en">انگلیسی</string>
+    <string name="lang_fa">فارسی</string>
 
     <string name="settings_launcher">لانچر</string>
     <string name="settings_memory">حافظه‌ی بازی (مگابایت)</string>
@@ -54,36 +85,92 @@
     <string name="settings_show_logs">کنسول</string>
 
     <string name="settings_runtime">ران‌تایم</string>
-    <string name="settings_runtime_hint">ابسی‌لانچر بازی را با یک «پک ران‌تایم» اجرا می‌کند: یک JVM مخصوص اندروید به‌همراه کتابخانه‌های LWJGL/MobileGlues، بسته‌بندی‌شده به‌صورت .tar.xz به‌همراه pack.json. برای هر معماری یک پک نصب کنید.</string>
-    <string name="settings_runtime_url">آدرس پک ران‌تایم (‎.tar.xz)</string>
+    <string name="settings_runtime_hint">بازی با «پک ران‌تایم» اجرا می‌شود: یک JVM مخصوص اندروید به‌همراه نیتیوهای LWJGL/MobileGlues که به شکل .tar.xz با pack.json بسته‌بندی شده است. پک ران‌تایم، نصب‌کننده‌های Forge/NeoForge و پچر OptiFine را هم اجرا می‌کند.</string>
+    <string name="settings_runtime_url">آدرس پک ران‌تایم (.tar.xz)</string>
     <string name="settings_runtime_install">دانلود و نصب</string>
-    <string name="settings_runtime_none">پک ران‌تایمی نصب نیست</string>
-    <string name="settings_runtime_ok">نصب‌شده: %1$s</string>
-    <string name="settings_runtime_docs">قالب پک و پک‌های آماده در مخزن (docs/RUNTIME-PACKS.md) توضیح داده شده است.</string>
+    <string name="settings_runtime_none">هیچ پک ران‌تایمی نصب نیست</string>
+    <string name="settings_runtime_ok">نصب شده: %1$s</string>
+    <string name="settings_runtime_docs">فرمت پک و پک‌های آماده در مخزن (docs/RUNTIME-PACKS.md) توضیح داده شده است.</string>
 
     <string name="about_title">درباره</string>
-    <string name="about_free">رایگان و متن‌باز — بدون کلید و قابلیت قفل</string>
-    <string name="about_credit">برای رندر OpenGL از MobileGlues استفاده می‌شود</string>
-    <string name="about_license">GPL-3.0-or-later · غیررسمی و بدون وابستگی به Mojang یا Microsoft</string>
+    <string name="about_free">رایگان و باز — بدون کلید، بدون قابلیت قفل</string>
+    <string name="about_credit">از MobileGlues برای رندر OpenGL استفاده می‌کند</string>
+    <string name="about_license">GPL-3.0-or-later · غیررسمی؛ وابسته به Mojang یا Microsoft نیست</string>
     <string name="about_version">نسخه %1$s</string>
 
-    <string name="console_title">کنسول بازی</string>
-    <string name="console_empty">پس از اجرای بازی، لاگ اینجا نمایش داده می‌شود</string>
-    <string name="console_stop">توقف بازی</string>
+    <string name="console_title">کنسول</string>
+    <string name="console_empty">لاگ بازی بعد از اجرا اینجا نمایش داده می‌شود</string>
+    <string name="console_stop">بستن بازی</string>
     <string name="console_running">در حال اجرا</string>
     <string name="console_stopped">غیرفعال</string>
     <string name="console_exit_code">بازی با کد %1$d خارج شد</string>
 
     <string name="dl_installing">در حال نصب %1$s</string>
-    <string name="dl_step_manifest">دریافت اطلاعات نسخه…</string>
-    <string name="dl_step_client">دانلود jar بازی…</string>
+    <string name="dl_step_manifest">گرفتن اطلاعات نسخه…</string>
+    <string name="dl_step_client">دانلود client jar…</string>
     <string name="dl_step_libraries">دانلود کتابخانه‌ها… (%1$d/%2$d)</string>
-    <string name="dl_step_natives">استخراج کتابخانه‌های سیستمی…</string>
-    <string name="dl_step_assets">دانلود منابع… (%1$d/%2$d)</string>
+    <string name="dl_step_natives">استخراج کتابخانه‌های نیتیو…</string>
+    <string name="dl_step_assets">دانلود assetها… (%1$d/%2$d)</string>
+    <string name="dl_step_loader_profile">گرفتن پروفایل لودر…</string>
+    <string name="dl_step_loader_installer">اجرای نصب‌کننده‌ی لودر…</string>
+    <string name="dl_step_loader_output">نصب‌کننده در حال کار است…</string>
+    <string name="dl_step_modpack_index">خواندن فهرست مادپک…</string>
+    <string name="dl_step_modpack_files">دانلود فایل‌های مادپک… (%1$d/%2$d)</string>
+    <string name="dl_step_verify">بررسی سلامت فایل‌ها…</string>
+    <string name="dl_step_repair_client">ترمیم client jar…</string>
+    <string name="dl_step_repair_libraries">ترمیم کتابخانه‌ها…</string>
     <string name="dl_done">‏%1$s نصب شد</string>
     <string name="dl_failed">خطا: %1$s</string>
-    <string name="dl_retry">تلاش دوباره</string>
+    <string name="dl_retry">تلاش مجدد</string>
     <string name="dl_cancel">لغو</string>
+
+    <string name="browse_open">مرور</string>
+    <string name="browse_mods">مادها</string>
+    <string name="browse_modpacks">مادپک‌ها</string>
+    <string name="browse_resourcepacks">ریسورس‌پک‌ها</string>
+    <string name="browse_shaders">شیدرپک‌ها</string>
+    <string name="browse_search_hint">جستجو در Modrinth…</string>
+    <string name="browse_search">جستجو</string>
+    <string name="browse_import_mrpack">ورود فایل .mrpack</string>
+    <string name="browse_target">نصب در %1$s (%2$s)</string>
+    <string name="browse_no_instance">اول یک اینستنس بسازید — نسخه‌ها ← نصب</string>
+    <string name="browse_results">نتایج</string>
+    <string name="browse_empty">چیزی پیدا نشد</string>
+    <string name="browse_versions">نسخه‌ها</string>
+    <string name="browse_no_compatible">نسخه‌ی سازگار با این اینستنس پیدا نشد</string>
+    <string name="browse_modpack_done">مادپک نصب شد — اینستنس جدید انتخاب شد</string>
+
+    <string name="deps_title">پیش‌نیازها · %1$s</string>
+    <string name="deps_hint">قبل از نصب %1$s ببینید به چه چیزهایی نیاز دارد. پیش‌نیازهای الزامی قفل هستند؛ موارد اختیاریِ نخواسته را تیک بزنید تا حذف شوند.</string>
+    <string name="deps_none">این پروژه پیش‌نیاز اضافه‌ای ندارد</string>
+    <string name="deps_required">الزامی</string>
+    <string name="deps_optional">اختیاری</string>
+    <string name="deps_installed">قبلاً نصب شده</string>
+    <string name="deps_required_by">پیش‌نیازِ %1$s</string>
+    <string name="deps_install">نصب</string>
+
+    <string name="instance_details">مدیریت</string>
+    <string name="instance_tab_content">محتوا</string>
+    <string name="instance_tab_settings">تنظیمات</string>
+    <string name="instance_custom">اینستنس دلخواه</string>
+    <string name="instance_name">نام اینستنس</string>
+    <string name="instance_saved">ذخیره شد</string>
+    <string name="instance_game">تنظیمات بازی</string>
+    <string name="instance_custom_memory">حافظه‌ی اختصاصی</string>
+    <string name="instance_custom_args">آرگومان‌های اختصاصی JVM</string>
+    <string name="instance_files">فایل‌های بازی</string>
+    <string name="instance_repair_hint">سلامت همه‌ی فایل‌ها (کلاینت، کتابخانه‌ها، assetها) بررسی و موارد خراب یا ناقص دوباره دانلود می‌شود.</string>
+    <string name="instance_repair">فیکس و ترمیم</string>
+    <string name="instance_repair_done">همه‌ی فایل‌ها بررسی و اصلاح شدند</string>
+
+    <string name="content_check_updates">بررسی بروزرسانی</string>
+    <string name="content_updates_done">‏%1$d ماد بروزرسانی شد</string>
+    <string name="content_empty_mods">هیچ مادی در این اینستنس نصب نیست</string>
+    <string name="content_empty_rp">هیچ ریسورس‌پکی نصب نیست</string>
+    <string name="content_empty_shaders">هیچ شیدرپکی نصب نیست</string>
+    <string name="content_empty_hint">از تب مادها (Modrinth) نصبشان کنید</string>
+    <string name="content_required_by">پیش‌نیازِ %1$s</string>
+    <string name="content_locked_info">‏%1$s قابل حذف نیست: محتوای نصب‌شده‌ی دیگری به آن وابسته است. اول آن محتوا را غیرفعال یا حذف کنید.</string>
 
     <string name="err_no_network">اتصال اینترنت نیست</string>
     <string name="err_generic">مشکلی پیش آمد: %1$s</string>

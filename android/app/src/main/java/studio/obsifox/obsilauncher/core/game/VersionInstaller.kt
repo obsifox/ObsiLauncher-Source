@@ -24,6 +24,9 @@ sealed class InstallState {
  * Installs a Minecraft version into the games directory:
  * version json + client jar + libraries (+ native extraction) + assets.
  * Every download is sha1-verified when Mojang publishes a checksum.
+ *
+ * [installLoaded] completes libraries/assets for a version whose JSON was
+ * already written by a loader (Fabric / Quilt profile, Forge installer, OptiFine).
  */
 class VersionInstaller(private val context: Context) {
 
@@ -40,70 +43,138 @@ class VersionInstaller(private val context: Context) {
     fun installed(): List<String> =
         Paths.versionsRoot(context).listFiles { f -> f.isDirectory }?.map { it.name }?.sorted().orEmpty()
 
-    suspend fun install(version: McVersion, settings: ObsiSettings) = withContext(Dispatchers.IO) {
-        if (state.value is InstallState.Running) return@withContext
-        cancelled = false
-        try {
-            run(version, settings)
-            state.value = InstallState.Done(version.id)
-        } catch (e: Exception) {
-            state.value = InstallState.Failed(e.message ?: e.javaClass.simpleName)
+    suspend fun install(version: McVersion, settings: ObsiSettings, progress: (InstallState) -> Unit = {}) =
+        withContext(Dispatchers.IO) {
+            if (state.value is InstallState.Running) return@withContext
+            cancelled = false
+            try {
+                val dir = Paths.versionDir(context, version.id)
+                dir.mkdirs()
+                emit("manifest", 0, 1, null, progress)
+                val text = Http.get(version.url) ?: throw IllegalStateException("no metadata for ${version.id}")
+                versionJson(context, version.id).writeText(text)
+                installRest(version.id, JSONObject(text), settings, progress)
+                state.value = InstallState.Done(version.id)
+            } catch (e: Exception) {
+                state.value = InstallState.Failed(e.message ?: e.javaClass.simpleName)
+            }
         }
-    }
 
-    private suspend fun run(version: McVersion, settings: ObsiSettings) {
-        val dir = Paths.versionDir(context, version.id)
-        dir.mkdirs()
+    /** Libraries + natives + assets for a version whose json already exists (loader profiles). */
+    suspend fun installLoaded(id: String, settings: ObsiSettings, progress: (InstallState) -> Unit = {}) =
+        withContext(Dispatchers.IO) {
+            cancelled = false
+            try {
+                val jsonFile = versionJson(context, id)
+                if (!jsonFile.isFile) throw IllegalStateException("version json missing for $id")
+                installRest(id, JSONObject(jsonFile.readText()), settings, progress)
+                state.value = InstallState.Done(id)
+            } catch (e: Exception) {
+                state.value = InstallState.Failed(e.message ?: e.javaClass.simpleName)
+            }
+        }
 
-        // 1) version json -------------------------------------------------------
-        step("manifest", 0, 1, null)
-        val jsonFile = versionJson(context, version.id)
-        val text = Http.get(version.url) ?: throw IllegalStateException("no metadata for ${version.id}")
-        jsonFile.writeText(text)
-        val root = JSONObject(text)
-        val downloads = root.optJSONObject("downloads")
+    /**
+     * "Fix & repair": verify the client jar, every library and every asset
+     * against their published sha1/size and delete anything missing or corrupt,
+     * then re-run the install so the gaps are re-downloaded.
+     */
+    suspend fun repair(id: String, settings: ObsiSettings, progress: (InstallState) -> Unit = {}) =
+        withContext(Dispatchers.IO) {
+            cancelled = false
+            try {
+                val jsonFile = versionJson(context, id)
+                if (!jsonFile.isFile) throw IllegalStateException("version json missing for $id")
+                val root = JSONObject(jsonFile.readText())
 
-        // 2) client jar ---------------------------------------------------------
-        val client = downloads?.optJSONObject("client")
-        if (client != null) {
-            step("client", 0, 1, 0f)
+                emit("verify", 0, 1, null, progress)
+                // client jar (and the inherited vanilla jar for loader profiles)
+                val chain = mutableListOf(id)
+                root.optString("inheritsFrom").takeIf { it.isNotEmpty() && it != id }?.let { chain.add(it) }
+                for (vid in chain) {
+                    val vRoot = if (vid == id) root else runCatching { JSONObject(versionJson(context, vid).readText()) }.getOrNull() ?: continue
+                    vRoot.optJSONObject("downloads")?.optJSONObject("client")?.let { client ->
+                        val jar = clientJar(context, vid)
+                        val sha1 = client.optString("sha1").takeIf { it.length == 40 }
+                        if (jar.isFile && sha1 != null && Http.sha1Of(jar) != sha1) {
+                            emit("repair_client", 0, 1, null, progress)
+                            jar.delete()
+                        } else if (!jar.isFile) {
+                            emit("repair_client", 0, 1, null, progress)
+                        }
+                    }
+                }
+                // libraries
+                val libRoot = Paths.librariesRoot(context)
+                for (lib in collectLibraries(root, id, progress)) {
+                    if (lib.url.startsWith("file://")) continue
+                    val dest = File(libRoot, lib.path)
+                    if (!dest.isFile) continue
+                    if (lib.sha1 != null && Http.sha1Of(dest) != lib.sha1) {
+                        emit("repair_libraries", 0, 1, null, progress)
+                        dest.delete()
+                    }
+                }
+                // assets
+                val indexObj = root.optJSONObject("assetIndex")
+                if (indexObj != null) {
+                    val indexId = indexObj.optString("id").ifEmpty { id }
+                    val indexFile = File(Paths.assetsRoot(context), "indexes/$indexId.json")
+                    if (indexFile.isFile) {
+                        val objects = runCatching { JSONObject(indexFile.readText()).optJSONObject("objects") }.getOrNull()
+                        if (objects != null) {
+                            val objectsRoot = File(Paths.assetsRoot(context), "objects")
+                            for (key in objects.keys()) {
+                                val obj = objects.getJSONObject(key)
+                                val hash = obj.getString("hash")
+                                val dest = File(objectsRoot, "${hash.substring(0, 2)}/$hash")
+                                if (dest.isFile && dest.length() != obj.optLong("size", dest.length())) dest.delete()
+                            }
+                        }
+                    }
+                }
+                installRest(id, root, settings, progress)
+                state.value = InstallState.Done(id)
+            } catch (e: Exception) {
+                state.value = InstallState.Failed(e.message ?: e.javaClass.simpleName)
+            }
+        }
+
+    private suspend fun installRest(
+        id: String,
+        root: JSONObject,
+        settings: ObsiSettings,
+        progress: (InstallState) -> Unit,
+    ) {
+        val dir = Paths.versionDir(context, id)
+        val inherits = root.optString("inheritsFrom").takeIf { it.isNotEmpty() }
+        if (inherits != null && inherits != id) {
+            // loader profile: the vanilla parent (jar + assets) must be complete first
+            if (!clientJar(context, inherits).isFile) {
+                val parent = File(Paths.versionsRoot(context), inherits)
+                parent.mkdirs()
+                emit("manifest", 0, 1, null, progress)
+                val parentJsonUrl = resolveParentUrl(inherits)
+                val text = Http.get(parentJsonUrl) ?: throw IllegalStateException("no metadata for $inherits")
+                versionJson(context, inherits).writeText(text)
+                installRest(inherits, JSONObject(text), settings, progress)
+            }
+        }
+
+        // 1) client jar (loader versions carry their own or reuse the parent's) ----
+        val client = root.optJSONObject("downloads")?.optJSONObject("client")
+        if (client != null && !clientJar(context, id).isFile) {
+            emit("client", 0, 1, 0f, progress)
             Http.downloadToFile(
                 url = client.getString("url"),
-                dest = clientJar(context, version.id),
+                dest = clientJar(context, id),
                 sha1 = client.optString("sha1").takeIf { it.length == 40 },
-            ) { done, total -> step("client", 0, 1, if (total > 0) done.toFloat() / total else null) }
+            ) { done, total -> emit("client", 0, 1, if (total > 0) done.toFloat() / total else null, progress) }
             checkCancelled()
         }
 
-        // 3) libraries ----------------------------------------------------------
-        val libs = root.optJSONArray("libraries") ?: JSONArray()
-        val wanted = ArrayList<LibEntry>(libs.length())
-        for (i in 0 until libs.length()) {
-            val entry = libs.getJSONObject(i)
-            if (!rulesAllow(entry.optJSONArray("rules"))) continue
-            val downloadsObj = entry.optJSONObject("downloads") ?: continue
-            val artifact = downloadsObj.optJSONObject("artifact") ?: continue
-            wanted += LibEntry(
-                coord = entry.getString("name"),
-                url = artifact.optString("url"),
-                path = artifact.optString("path").ifEmpty { mavenPath(entry.getString("name")) },
-                sha1 = artifact.optString("sha1").takeIf { it.length == 40 },
-                size = artifact.optLong("size", 0L),
-            )
-            val nativesLinux = downloadsObj.optJSONObject("natives-linux")
-            if (nativesLinux != null) {
-                wanted += LibEntry(
-                    coord = entry.getString("name"),
-                    url = nativesLinux.optString("url"),
-                    path = nativesLinux.optString("path").ifEmpty {
-                        mavenPath(entry.getString("name"), classifier = "natives-linux")
-                    },
-                    sha1 = nativesLinux.optString("sha1").takeIf { it.length == 40 },
-                    size = nativesLinux.optLong("size", 0L),
-                    isNatives = true,
-                )
-            }
-        }
+        // 2) libraries -----------------------------------------------------------
+        val wanted = collectLibraries(root, id, progress)
         val libRoot = Paths.librariesRoot(context)
         val jarLibs = ArrayList<File>(wanted.size)
         val nativesJars = ArrayList<File>()
@@ -111,28 +182,30 @@ class VersionInstaller(private val context: Context) {
             checkCancelled()
             val dest = File(libRoot, lib.path)
             if (!dest.isFile || dest.length() == 0L) {
-                step("libraries", index, wanted.size, index.toFloat() / wanted.size)
-                if (lib.url.isNotEmpty()) {
+                emit("libraries", index, wanted.size, index.toFloat() / wanted.size, progress)
+                if (lib.url.startsWith("file://")) {
+                    val src = File(lib.url.removePrefix("file://"))
+                    if (src.isFile) {
+                        dest.parentFile?.mkdirs()
+                        src.copyTo(dest, overwrite = true)
+                    }
+                } else if (lib.url.isNotEmpty()) {
                     Http.downloadToFile(lib.url, dest, lib.sha1) { done, total ->
-                        val base = index.toFloat() / wanted.size
-                        val part = if (total > 0) (done.toFloat() / total) / wanted.size else 0f
-                        step("libraries", index, wanted.size, base + part)
+                        emit("libraries", index, wanted.size, libFraction(index, wanted.size, done, total), progress)
                     }
                 } else if (lib.coord.isNotEmpty()) {
-                    val repo = defaultRepoFor(lib.coord)
+                    val repo = lib.repo.ifEmpty { defaultRepoFor(lib.coord) }
                     Http.downloadToFile("$repo/${lib.path}", dest, lib.sha1) { done, total ->
-                        val base = index.toFloat() / wanted.size
-                        val part = if (total > 0) (done.toFloat() / total) / wanted.size else 0f
-                        step("libraries", index, wanted.size, base + part)
+                        emit("libraries", index, wanted.size, libFraction(index, wanted.size, done, total), progress)
                     }
                 }
             }
             if (lib.isNatives) nativesJars += dest else jarLibs += dest
         }
 
-        // 4) extract natives ----------------------------------------------------
-        step("natives", 0, 1, null)
-        val nativesDir = File(dir, "natives")
+        // 3) extract natives ------------------------------------------------------
+        emit("natives", 0, 1, null, progress)
+        val nativesDir = nativesDir(context, id)
         nativesDir.mkdirs()
         nativesJars.forEach { jar ->
             runCatching {
@@ -151,56 +224,156 @@ class VersionInstaller(private val context: Context) {
             }
         }
 
-        // 5) assets -------------------------------------------------------------
-        val indexObj = root.optJSONObject("assetIndex")
-        if (indexObj != null) {
-            val indexId = indexObj.optString("id").ifEmpty { version.id }
-            val indexFile = File(Paths.assetsRoot(context), "indexes/$indexId.json")
-            val indexText = if (indexFile.isFile && indexFile.length() > 0) {
-                indexFile.readText()
-            } else {
-                val t = Http.get(indexObj.getString("url"))
-                    ?: throw IllegalStateException("no asset index for $indexId")
-                indexFile.parentFile?.mkdirs()
-                indexFile.writeText(t)
-                t
-            }
-            val objects = JSONObject(indexText).optJSONObject("objects") ?: JSONObject()
-            val keys = objects.keys().asSequence().toList()
-            val objectsRoot = File(Paths.assetsRoot(context), "objects")
-            keys.forEachIndexed { index, key ->
-                checkCancelled()
-                val obj = objects.getJSONObject(key)
-                val hash = obj.getString("hash")
-                val dest = File(objectsRoot, "${hash.substring(0, 2)}/$hash")
-                if (!dest.isFile || dest.length() != obj.optLong("size", dest.length())) {
-                    if (obj.optLong("size", 0L) == 0L && dest.isFile) return@forEachIndexed
-                    step("assets", index, keys.size, index.toFloat() / keys.size)
-                    Http.downloadToFile("$RESOURCES/${hash.substring(0, 2)}/$hash", dest, hash)
+        // 4) assets ----------------------------------------------------------------
+        downloadAssets(id, root, progress)
+
+        // 5) mark selected if nothing chosen yet -------------------------------------
+        if (settings.selectedVersionValue.isBlank()) settings.selectedVersionValue = id
+    }
+
+    private fun libFraction(index: Int, total: Int, done: Long, fileTotal: Long): Float {
+        val base = index.toFloat() / total
+        val part = if (fileTotal > 0) (done.toFloat() / fileTotal) / total else 0f
+        return base + part
+    }
+
+    /** Vanilla parent URL for inheritsFrom resolution, straight from the cached manifest. */
+    private fun resolveParentUrl(id: String): String {
+        val cached = File(context.cacheDir, "version_manifest_v2.json")
+        if (cached.isFile) {
+            runCatching {
+                val arr = JSONObject(cached.readText()).getJSONArray("versions")
+                for (i in 0 until arr.length()) {
+                    val v = arr.getJSONObject(i)
+                    if (v.getString("id") == id) return v.getString("url")
                 }
             }
         }
-
-        // 6) mark selected if nothing chosen yet ----------------------------------
-        if (settings.selectedVersionValue.isBlank()) settings.selectedVersionValue = version.id
+        return "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
     }
 
-    private fun step(step: String, done: Int, total: Int, fraction: Float?) {
-        state.value = InstallState.Running(step, done, total, fraction)
+    private suspend fun downloadAssets(id: String, root: JSONObject, progress: (InstallState) -> Unit) {
+        val indexObj = root.optJSONObject("assetIndex") ?: return
+        val indexId = indexObj.optString("id").ifEmpty { id }
+        val indexFile = File(Paths.assetsRoot(context), "indexes/$indexId.json")
+        val indexText = if (indexFile.isFile && indexFile.length() > 0) {
+            indexFile.readText()
+        } else {
+            val t = Http.get(indexObj.getString("url"))
+                ?: throw IllegalStateException("no asset index for $indexId")
+            indexFile.parentFile?.mkdirs()
+            indexFile.writeText(t)
+            t
+        }
+        val objects = JSONObject(indexText).optJSONObject("objects") ?: JSONObject()
+        val keys = objects.keys().asSequence().toList()
+        val objectsRoot = File(Paths.assetsRoot(context), "objects")
+        keys.forEachIndexed { index, key ->
+            checkCancelled()
+            val obj = objects.getJSONObject(key)
+            val hash = obj.getString("hash")
+            val dest = File(objectsRoot, "${hash.substring(0, 2)}/$hash")
+            if (!dest.isFile || dest.length() != obj.optLong("size", dest.length())) {
+                if (obj.optLong("size", 0L) == 0L && dest.isFile) return@forEachIndexed
+                emit("assets", index, keys.size, index.toFloat() / keys.size, progress)
+                Http.downloadToFile("$RESOURCES/${hash.substring(0, 2)}/$hash", dest, hash)
+            }
+        }
     }
 
-    private fun checkCancelled() {
-        if (cancelled) throw InterruptedException("cancelled")
-    }
-
-    data class LibEntry(
+    private data class LibEntry(
         val coord: String,
         val url: String,
         val path: String,
         val sha1: String?,
         val size: Long,
+        val repo: String = "",
         val isNatives: Boolean = false,
     )
+
+    /**
+     * Collects the library list for a version, merging the inherited (vanilla)
+     * libraries for loader profiles and understanding both the modern
+     * `downloads` layout and the pre-1.13 `name`+`url` layout.
+     */
+    private fun collectLibraries(root: JSONObject, id: String, progress: (InstallState) -> Unit): List<LibEntry> {
+        val out = ArrayList<LibEntry>()
+        val seen = HashSet<String>()
+
+        fun addFrom(json: JSONObject) {
+            val libs = json.optJSONArray("libraries") ?: return
+            for (i in 0 until libs.length()) {
+                val entry = libs.getJSONObject(i)
+                if (!rulesAllow(entry.optJSONArray("rules"))) continue
+                val coord = entry.optString("name")
+                if (coord.isEmpty() || !seen.add(coord)) continue
+                val downloads = entry.optJSONObject("downloads")
+                if (downloads != null) {
+                    downloads.optJSONObject("artifact")?.let { artifact ->
+                        out += LibEntry(
+                            coord = coord,
+                            url = artifact.optString("url"),
+                            path = artifact.optString("path").ifEmpty { mavenPath(coord) },
+                            sha1 = artifact.optString("sha1").takeIf { it.length == 40 },
+                            size = artifact.optLong("size", 0L),
+                        )
+                    }
+                    downloads.optJSONObject("natives-linux")?.let { nativesLinux ->
+                        out += LibEntry(
+                            coord = coord,
+                            url = nativesLinux.optString("url"),
+                            path = nativesLinux.optString("path").ifEmpty { mavenPath(coord, "natives-linux") },
+                            sha1 = nativesLinux.optString("sha1").takeIf { it.length == 40 },
+                            size = nativesLinux.optLong("size", 0L),
+                            isNatives = true,
+                        )
+                    }
+                } else {
+                    // pre-1.13 layout: name + optional repo url
+                    out += LibEntry(
+                        coord = coord,
+                        url = "",
+                        path = mavenPath(coord),
+                        sha1 = null,
+                        size = 0L,
+                        repo = entry.optString("url").removeSuffix("/").takeIf { it.isNotEmpty() } ?: "",
+                    )
+                    if (entry.has("natives-linux") || entry.optString("natives").isNotEmpty()) {
+                        out += LibEntry(
+                            coord = coord,
+                            url = "",
+                            path = mavenPath(coord, "natives-linux"),
+                            sha1 = null,
+                            size = 0L,
+                            repo = entry.optString("url").removeSuffix("/").takeIf { it.isNotEmpty() } ?: "",
+                            isNatives = true,
+                        )
+                    }
+                }
+            }
+        }
+
+        // inherited (vanilla) libraries first so loader libraries win on duplicates
+        val inherits = root.optString("inheritsFrom").takeIf { it.isNotEmpty() }
+        if (inherits != null && inherits != id) {
+            val parentJson = versionJson(context, inherits)
+            if (parentJson.isFile) {
+                runCatching { addFrom(JSONObject(parentJson.readText())) }
+            }
+        }
+        addFrom(root)
+        return out
+    }
+
+    private fun emit(step: String, done: Int, total: Int, fraction: Float?, progress: (InstallState) -> Unit) {
+        val s = InstallState.Running(step, done, total, fraction)
+        state.value = s
+        progress(s)
+    }
+
+    private fun checkCancelled() {
+        if (cancelled) throw InterruptedException("cancelled")
+    }
 
     companion object {
         private const val RESOURCES = "https://resources.download.minecraft.net"

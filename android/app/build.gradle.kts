@@ -2,8 +2,8 @@ import java.util.Properties
 import com.android.build.api.variant.impl.VariantOutputImpl
 
 // ObsiLauncher release identity (bump here and in defaultConfig)
-val APP_VERSION_NAME = "1.3.0"
-val APP_VERSION_CODE = 10300
+val APP_VERSION_NAME = "1.4.0"
+val APP_VERSION_CODE = 10400
 
 plugins {
     alias(libs.plugins.android.application)
@@ -48,7 +48,7 @@ android {
             path = file("src/main/cpp/Android.mk")
         }
     }
-    ndkVersion = "25.2.9519653"
+    ndkVersion = "27.2.12479018"
 
     signingConfigs {
         create("releaseBuild") {
@@ -120,4 +120,5 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.commons.compress)
     implementation(libs.xz)
+    implementation(libs.coil.compose)
 }

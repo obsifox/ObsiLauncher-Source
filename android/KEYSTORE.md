@@ -17,3 +17,10 @@ signed builds.
 
 > APK updates install only over builds signed with this same key. Never regenerate
 > it casually — users would have to uninstall/reinstall.
+>
+> **Note (1.4.0):** the keystore file was regenerated with the *same* alias and
+> passwords after the original build machine was lost. Builds from 1.4.0 onward
+> are signed with the key shipped in this repository
+> (`android/app/obsilauncher.jks`, committed on purpose). Installing 1.4.0 over
+> 1.2.0/1.3.0 requires a one-time uninstall/reinstall — after that, updates
+> install in place again.

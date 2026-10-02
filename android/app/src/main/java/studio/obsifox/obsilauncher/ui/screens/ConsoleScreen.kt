@@ -27,7 +27,7 @@ import studio.obsifox.obsilauncher.ui.components.ObsiButton
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
 @Composable
-fun ConsoleScreen() {
+fun ConsoleScreen(onClose: () -> Unit = {}) {
     val context = LocalContext.current
     val app = context.app
     val obsi = LocalObsi.current
@@ -60,6 +60,11 @@ fun ConsoleScreen() {
                         danger = true,
                     )
                 }
+                studio.obsifox.obsilauncher.ui.components.ObsiTextButton(
+                    text = "✕",
+                    onClick = onClose,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
             exitCode?.let { code ->
                 if (state == GameState.EXITED) {

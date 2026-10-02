@@ -4,19 +4,20 @@ import android.content.Context
 import studio.obsifox.obsilauncher.core.ObsiSettings
 import studio.obsifox.obsilauncher.core.Paths
 import studio.obsifox.obsilauncher.core.accounts.Account
+import studio.obsifox.obsilauncher.core.instance.Instance
 import studio.obsifox.obsilauncher.core.jni.ObsiBridge
 import studio.obsifox.obsilauncher.core.runtime.Pack
 import org.json.JSONObject
 import java.io.File
 
 /**
- * Builds the full JVM command line for the selected version and spawns it
+ * Builds the full JVM command line for an instance and spawns it
  * through [ObsiBridge.forkAndExec] (system-linker trick).
  */
 object LaunchPipeline {
 
     data class Request(
-        val versionId: String,
+        val instance: Instance,
         val account: Account,
         val pack: Pack,
         val memoryMb: Int,
@@ -24,46 +25,48 @@ object LaunchPipeline {
     )
 
     fun buildClasspath(context: Context, versionId: String): List<File> {
-        val json = VersionInstaller.versionJson(context, versionId)
-        val root = JSONObject(json.readText())
+        val json = versionJsonOrInherited(context, versionId)
         val out = ArrayList<File>()
-        out += VersionInstaller.clientJar(context, versionId)
-        val libs = root.optJSONArray("libraries") ?: return out
+        out += clientJarChain(context, versionId)
         val libRoot = Paths.librariesRoot(context)
-        for (i in 0 until libs.length()) {
-            val entry = libs.getJSONObject(i)
-            if (!VersionInstaller.rulesAllow(entry.optJSONArray("rules"))) continue
-            val artifact = entry.optJSONObject("downloads")?.optJSONObject("artifact") ?: continue
-            val path = artifact.optString("path").ifEmpty { VersionInstaller.mavenPath(entry.getString("name")) }
-            val file = File(libRoot, path)
+        for (lib in VersionInstallerCollector.collect(context, versionId)) {
+            val file = File(libRoot, lib.second)
             if (file.isFile) out += file
         }
         return out
     }
 
+    /** client jar chain entry: the child jar (OptiFine jar = fully patched) */
+    private fun clientJarChain(context: Context, versionId: String): File =
+        VersionInstaller.clientJar(context, versionId)
+
+    private fun versionJsonOrInherited(context: Context, versionId: String): JSONObject =
+        runCatching { JSONObject(VersionInstaller.versionJson(context, versionId).readText()) }.getOrDefault(JSONObject())
+
     fun argv(context: Context, req: Request): List<String> {
-        val json = JSONObject(VersionInstaller.versionJson(context, req.versionId).readText())
-        val versionDir = Paths.versionDir(context, req.versionId)
-        val natives = VersionInstaller.nativesDir(context, req.versionId)
+        val versionId = req.instance.versionId
+        val json = versionJsonOrInherited(context, versionId)
+        val versionDir = Paths.versionDir(context, versionId)
         val assetsIndex = json.optJSONObject("assetIndex")?.optString("id")?.takeIf { it.isNotEmpty() }
-            ?: req.versionId
+            ?: req.instance.mcVersion
 
         val jvm = ArrayList<String>()
-        jvm += req.pack.jvmArgs
-        jvm += "-Xmx${req.memoryMb}M"
-        jvm += "-Xms${(req.memoryMb / 2).coerceAtLeast(512)}M"
+        jvm += req.pack.jvmArgs.filter { !it.startsWith("-Xmx") && !it.startsWith("-Xms") }
+        val mx = if (req.memoryMb > 0) req.memoryMb else 2048
+        jvm += "-Xmx${mx}M"
+        jvm += "-Xms${(mx / 2).coerceAtLeast(512)}M"
         jvm += "-XX:+UseG1GC"
         jvm += "-XX:G1NewSizePercent=20"
         jvm += "-XX:G1ReservePercent=20"
         jvm += "-XX:MaxGCPauseMillis=50"
         jvm += "-XX:G1HeapRegionSize=32M"
         jvm += req.extraJvmArgs.filter { it.isNotBlank() }
-        jvm += "-Djava.library.path=${natives.absolutePath}:${req.pack.libDirs.joinToString(":") { it.absolutePath }}"
+        jvm += "-Djava.library.path=${VersionInstaller.nativesDir(context, versionId).absolutePath}:${req.pack.libDirs.joinToString(":") { it.absolutePath }}"
         jvm += "-Dorg.lwjgl.system.allocator=jemalloc"
         jvm += "-Dio.netty.tryReflectionSetAccessible=true"
         jvm += "-Dfml.earlyprogresswindow=false"
         jvm += "-cp"
-        jvm += buildClasspath(context, req.versionId).joinToString(":") { it.absolutePath }
+        jvm += buildClasspath(context, versionId).joinToString(":") { it.absolutePath }
         jvm += json.optString("mainClass").ifEmpty { "net.minecraft.client.main.Main" }
 
         val game = ArrayList<String>()
@@ -72,19 +75,19 @@ object LaunchPipeline {
         game += "--uuid"
         game += req.account.offlineUuid()
         game += "--accessToken"
-        game += "0"
+        game += req.account.accessToken.ifEmpty { "0" }
         game += "--clientId"
         game += "\${clientid}"
         game += "--xuid"
         game += "\${auth_xuid}"
         game += "--userType"
-        game += "legacy"
+        game += if (req.account.isMicrosoft) "msa" else "legacy"
         game += "--versionIndex"
-        game += req.versionId
+        game += versionId
         game += "--versionType"
         game += "ObsiLauncher"
         game += "--version"
-        game += req.versionId
+        game += versionId
         game += "--gameDir"
         game += versionDir.absolutePath
         game += "--assetsDir"
@@ -100,9 +103,9 @@ object LaunchPipeline {
     }
 
     fun env(context: Context, req: Request): List<String> {
-        val versionDir = Paths.versionDir(context, req.versionId)
+        val versionDir = Paths.versionDir(context, req.instance.versionId)
         val libPath = listOf(
-            VersionInstaller.nativesDir(context, req.versionId).absolutePath,
+            VersionInstaller.nativesDir(context, req.instance.versionId).absolutePath,
             req.pack.libDirs.joinToString(":") { it.absolutePath },
         ).joinToString(":")
         return listOf(
@@ -124,5 +127,35 @@ object LaunchPipeline {
             argv(context, req).toTypedArray(),
             env(context, req).toTypedArray(),
         )
+    }
+}
+
+/** internal helper: gather classpath library paths from a version (inheriting parents) */
+private object VersionInstallerCollector {
+    fun collect(context: Context, versionId: String): List<Pair<String, String>> {
+        val out = ArrayList<Pair<String, String>>()
+        val seen = HashSet<String>()
+        fun addFrom(root: JSONObject) {
+            val libs = root.optJSONArray("libraries") ?: return
+            for (i in 0 until libs.length()) {
+                val entry = libs.getJSONObject(i)
+                if (!VersionInstaller.rulesAllow(entry.optJSONArray("rules"))) continue
+                val coord = entry.optString("name")
+                if (coord.isEmpty() || !seen.add(coord)) continue
+                val path = entry.optJSONObject("downloads")?.optJSONObject("artifact")?.optString("path")
+                    ?.takeIf { it.isNotEmpty() } ?: VersionInstaller.mavenPath(coord)
+                out += coord to path
+            }
+        }
+        val json = VersionInstaller.versionJson(context, versionId)
+        if (!json.isFile) return out
+        val root = runCatching { JSONObject(json.readText()) }.getOrNull() ?: return out
+        val inherits = root.optString("inheritsFrom").takeIf { it.isNotEmpty() && it != versionId }
+        if (inherits != null) {
+            val parent = VersionInstaller.versionJson(context, inherits)
+            if (parent.isFile) runCatching { addFrom(JSONObject(parent.readText())) }
+        }
+        addFrom(root)
+        return out
     }
 }

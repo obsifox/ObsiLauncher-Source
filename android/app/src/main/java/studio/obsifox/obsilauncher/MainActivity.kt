@@ -17,6 +17,22 @@ import androidx.compose.ui.Modifier
 
 class MainActivity : ComponentActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        // in-app language override: system | en | fa
+        val prefs = newBase.getSharedPreferences("obsi_settings", android.content.Context.MODE_PRIVATE)
+        val lang = prefs.getString("language", "system") ?: "system"
+        super.attachBaseContext(
+            if (lang == "system") newBase
+            else {
+                val config = android.content.res.Configuration(newBase.resources.configuration)
+                config.setLocale(java.util.Locale.forLanguageTag(lang))
+                val ctx = newBase.createConfigurationContext(config)
+                // also applies to layout direction (FA = RTL)
+                ctx
+            },
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

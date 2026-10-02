@@ -87,7 +87,7 @@ object Http {
         conn.connectTimeout = CONNECT_TIMEOUT
         conn.readTimeout = READ_TIMEOUT
         conn.instanceFollowRedirects = true
-        conn.setRequestProperty("User-Agent", "ObsiLauncher/1.3.0 (free, GPL-3.0)")
+        conn.setRequestProperty("User-Agent", "ObsiLauncher/1.4.0 (free, GPL-3.0)")
         return conn
     }
 
@@ -102,5 +102,37 @@ object Http {
             }
         }
         return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    fun enc(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8.name())
+        .replace("+", "%20")
+
+    /** POST a JSON body, return the JSON text response (Modrinth bulk endpoints). */
+    fun postJson(url: String, body: String): String = repeatable {
+        val conn = open(url)
+        try {
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "application/json")
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            if (conn.responseCode !in 200..299) throw IOException("HTTP ${conn.responseCode} for $url")
+            conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** GET JSON with a bearer token (Minecraft services). */
+    fun authedJson(url: String, token: String): String? = repeatable {
+        val conn = open(url)
+        try {
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            conn.setRequestProperty("Accept", "application/json")
+            if (conn.responseCode !in 200..299) throw IOException("HTTP ${conn.responseCode} for $url")
+            conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } finally {
+            conn.disconnect()
+        }
     }
 }

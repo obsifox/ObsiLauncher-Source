@@ -21,4 +21,4 @@ signing/
 local.properties
 
 # the ObsiLauncher release keystore is public on purpose (see android/KEYSTORE.md)
-!android/overlay/ZalithLauncher/obsilauncher.jks
+!android/app/obsilauncher.jks

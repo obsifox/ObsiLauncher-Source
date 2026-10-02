@@ -58,6 +58,7 @@ class ObsiSettings(context: Context) {
     val memoryMb = state("memory_mb", 2048) { p, k -> p.getInt(k, 2048).coerceIn(512, 8192) }
     val javaArgs = state("java_args", "", ::str)
     val runtimePack = state("runtime_pack", "", ::str)
+    val language = state("language", "system") { p, k -> p.getString(k, "system") ?: "system" }
 
     // ---- typed accessors -----------------------------------------------------
 
@@ -88,6 +89,10 @@ class ObsiSettings(context: Context) {
     var runtimePackValue: String
         get() = runtimePack.value
         set(v) { prefs.edit().putString("runtime_pack", v).apply() }
+
+    var languageValue: String
+        get() = language.value
+        set(v) { prefs.edit().putString("language", v).apply() }
 
     private companion object {
         fun str(p: SharedPreferences, k: String): String = p.getString(k, "") ?: ""

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -26,21 +25,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import studio.obsifox.obsilauncher.R
 import studio.obsifox.obsilauncher.app
 import studio.obsifox.obsilauncher.core.game.InstallState
 import studio.obsifox.obsilauncher.core.game.McVersion
+import studio.obsifox.obsilauncher.core.loaders.LoaderType
 import studio.obsifox.obsilauncher.ui.components.GlassCard
 import studio.obsifox.obsilauncher.ui.components.ObsiButton
 import studio.obsifox.obsilauncher.ui.components.ObsiGhostButton
 import studio.obsifox.obsilauncher.ui.components.ObsiTextButton
 import studio.obsifox.obsilauncher.ui.components.ProgressRow
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
-import kotlinx.coroutines.launch
 
 @Composable
 fun VersionsScreen() {
@@ -64,8 +63,13 @@ fun VersionsScreen() {
     val releases = allVersions.filter { it.type == "release" }
     val snapshots = allVersions.filter { it.type == "snapshot" }
     val old = allVersions.filter { it.isOld }
-    val selected by app.settings.selectedVersion.collectAsState()
     val installState by app.installer.state.collectAsState()
+    val loaderState by app.loaders.state.collectAsState()
+    val instances by app.instances.instances.collectAsState()
+
+    // loader install flow state
+    var loaderPick by remember { mutableStateOf<McVersion?>(null) }
+    var loaderVersionPick by remember { mutableStateOf<Pair<LoaderType, McVersion>?>(null) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         TabRow(
@@ -83,27 +87,172 @@ fun VersionsScreen() {
         }
         Spacer(Modifier.height(12.dp))
 
-        when (installState) {
-            is InstallState.Running -> InstallProgressCard(installState as InstallState.Running)
-            is InstallState.Failed -> InstallFailedCard(installState as InstallState.Failed)
-            else -> {}
+        when {
+            installState is InstallState.Running -> InstallProgressCard(installState as InstallState.Running)
+            loaderState is InstallState.Running -> InstallProgressCard(loaderState as InstallState.Running)
+            installState is InstallState.Failed -> InstallFailedCard(installState as InstallState.Failed)
+            loaderState is InstallState.Failed -> InstallFailedCard(loaderState as InstallState.Failed)
+            installState is InstallState.Done || loaderState is InstallState.Done -> {
+                val id = when {
+                    installState is InstallState.Done -> (installState as InstallState.Done).id
+                    else -> (loaderState as InstallState.Done).id
+                }
+                GlassCard(modifier = Modifier.padding(bottom = 12.dp)) {
+                    Text(stringResourceCompat(R.string.dl_done, id), color = obsi.accent)
+                }
+            }
         }
 
         when (tab) {
-            0 -> InstalledList(
-                selected = selected,
-                onSelect = { app.settings.selectedVersionValue = it },
-                onDelete = {
-                    val dir = studio.obsifox.obsilauncher.core.Paths.versionDir(context, it)
-                    dir.deleteRecursively()
-                    if (selected == it) app.settings.selectedVersionValue = ""
-                },
-            )
-            1 -> RemoteList(releases, manifestLoading, selected) { v -> scope.launch { app.installer.install(v, app.settings) } }
-            2 -> RemoteList(snapshots, manifestLoading, selected) { v -> scope.launch { app.installer.install(v, app.settings) } }
-            3 -> RemoteList(old, manifestLoading, selected) { v -> scope.launch { app.installer.install(v, app.settings) } }
+            0 -> InstalledList(instances) { v ->
+                app.instances.setActive(v.id)
+                app.settings.selectedVersionValue = v.versionId
+            }
+            1 -> RemoteList(releases, manifestLoading) { v -> loaderPick = v }
+            2 -> RemoteList(snapshots, manifestLoading) { v -> loaderPick = v }
+            3 -> RemoteList(old, manifestLoading) { v -> loaderPick = v }
         }
     }
+
+    // step 1: choose the loader for this Minecraft version
+    loaderPick?.let { mc ->
+        LoaderPickerDialog(
+            mc = mc,
+            onDismiss = { loaderPick = null },
+            onVanilla = { picked ->
+                val version = picked
+                loaderPick = null
+                scope.launch {
+                    app.installer.install(version, app.settings)
+                    app.instances.create(version.id, version.id, version.id, LoaderType.VANILLA)
+                }
+            },
+            onLoader = { type ->
+                loaderVersionPick = type to mc
+                loaderPick = null
+            },
+        )
+    }
+
+    // step 2: choose the loader version
+    loaderVersionPick?.let { (type, mc) ->
+        LoaderVersionDialog(
+            type = type,
+            mc = mc.id,
+            onDismiss = { loaderVersionPick = null },
+            onPick = { lv ->
+                val pair = type to mc
+                loaderVersionPick = null
+                scope.launch {
+                    try {
+                        val installed = app.loaders.install(type, mc.id, lv, app.installer, app.settings)
+                        app.instances.create(installed.versionId, installed.versionId, mc.id, type, installed.loaderVersion)
+                    } catch (_: Exception) {
+                    }
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun LoaderPickerDialog(
+    mc: McVersion,
+    onDismiss: () -> Unit,
+    onVanilla: (McVersion) -> Unit,
+    onLoader: (LoaderType) -> Unit,
+) {
+    val obsi = LocalObsi.current
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResourceCompat(R.string.loader_pick_title, mc.id)) },
+        text = {
+            Column {
+                Text(stringResourceCompat(R.string.loader_pick_hint), color = obsi.textDim, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(10.dp))
+                listOf(LoaderType.VANILLA, LoaderType.FABRIC, LoaderType.FORGE, LoaderType.NEOFORGE, LoaderType.QUILT, LoaderType.OPTIFINE).forEach { type ->
+                    GlassCard(modifier = Modifier.padding(vertical = 4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (type == LoaderType.VANILLA) onVanilla(mc) else onLoader(type)
+                                },
+                        ) {
+                            Text(type.display, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(0.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { ObsiTextButton(stringResourceCompat(R.string.cancel), onClick = onDismiss) },
+    )
+}
+
+@Composable
+private fun LoaderVersionDialog(
+    type: LoaderType,
+    mc: String,
+    onDismiss: () -> Unit,
+    onPick: (String?) -> Unit,
+) {
+    val obsi = LocalObsi.current
+    var versions by remember { mutableStateOf<List<studio.obsifox.obsilauncher.core.loaders.LoaderVersion>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val app = context.app
+
+    LaunchedEffect(type, mc) {
+        try {
+            versions = app.loaders.versions(type, mc)
+        } catch (e: Exception) {
+            error = e.message
+        } finally {
+            loading = false
+        }
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResourceCompat(R.string.loader_version_title, type.display, mc)) },
+        text = {
+            Column {
+                if (loading) {
+                    Text("…", color = obsi.textDim)
+                } else if (versions.isEmpty()) {
+                    Text(stringResourceCompat(R.string.loader_none), color = obsi.textDim)
+                } else {
+                    LazyColumn(modifier = Modifier.height(320.dp)) {
+                        items(versions, key = { it.version }) { lv ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPick(lv.version) }
+                                    .padding(vertical = 8.dp),
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(lv.version, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                    if (lv.recommended) {
+                                        Text(stringResourceCompat(R.string.loader_recommended), style = MaterialTheme.typography.labelMedium, color = obsi.accent)
+                                    } else if (!lv.stable) {
+                                        Text(stringResourceCompat(R.string.loader_unstable), style = MaterialTheme.typography.labelMedium, color = obsi.textDim)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                error?.let { Text(it, color = obsi.danger, style = MaterialTheme.typography.bodyMedium) }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { ObsiTextButton(stringResourceCompat(R.string.cancel), onClick = onDismiss) },
+    )
 }
 
 @Composable
@@ -117,7 +266,15 @@ private fun InstallProgressCard(state: InstallState.Running) {
             "libraries" -> stringResourceCompat(R.string.dl_step_libraries, state.done + 1, state.total)
             "natives" -> stringResourceCompat(R.string.dl_step_natives)
             "assets" -> stringResourceCompat(R.string.dl_step_assets, state.done + 1, state.total)
-            else -> state.step
+            "loader_profile" -> stringResourceCompat(R.string.dl_step_loader_profile)
+            "loader_installer" -> stringResourceCompat(R.string.dl_step_loader_installer)
+            "loader_output" -> stringResourceCompat(R.string.dl_step_loader_output)
+            "modpack_index" -> stringResourceCompat(R.string.dl_step_modpack_index)
+            "modpack_files" -> stringResourceCompat(R.string.dl_step_modpack_files, state.done + 1, state.total)
+            "verify" -> stringResourceCompat(R.string.dl_step_verify)
+            "repair_client" -> stringResourceCompat(R.string.dl_step_repair_client)
+            "repair_libraries" -> stringResourceCompat(R.string.dl_step_repair_libraries)
+            else -> if (state.step.startsWith("content:")) state.step.removePrefix("content:") else state.step
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { ProgressRow(label, state.fraction) }
@@ -126,11 +283,6 @@ private fun InstallProgressCard(state: InstallState.Running) {
                 onClick = { context.app.installer.cancel() },
             )
         }
-        Text(
-            text = stringResourceCompat(R.string.dl_installing, ""),
-            style = MaterialTheme.typography.labelMedium,
-            color = obsi.textDim,
-        )
     }
 }
 
@@ -144,43 +296,41 @@ private fun InstallFailedCard(state: InstallState.Failed) {
         )
         ObsiGhostButton(stringResourceCompat(R.string.dl_retry), onClick = {
             context.app.installer.state.value = InstallState.Idle
+            context.app.loaders.state.value = InstallState.Idle
         })
     }
 }
 
 @Composable
-private fun InstalledList(selected: String, onSelect: (String) -> Unit, onDelete: (String) -> Unit) {
+private fun InstalledList(instances: List<studio.obsifox.obsilauncher.core.instance.Instance>, onSelect: (studio.obsifox.obsilauncher.core.instance.Instance) -> Unit) {
     val context = LocalContext.current
     val app = context.app
-    val installed = app.installer.installed()
     val obsi = LocalObsi.current
-    if (installed.isEmpty()) {
+    if (instances.isEmpty()) {
         GlassCard { Text(stringResourceCompat(R.string.versions_empty_installed), color = obsi.textDim) }
         return
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(installed) { id ->
+        items(instances, key = { it.id }) { instance ->
             GlassCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(
                         Modifier
                             .weight(1f)
-                            .clickable { onSelect(id) },
+                            .clickable { onSelect(instance) },
                     ) {
-                        Text(id, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        if (id == selected) {
-                            Text(
-                                stringResourceCompat(R.string.versions_selected),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = obsi.accent,
-                            )
-                        }
+                        Text(instance.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            loaderBadge(instance) + " · " + instance.versionId,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = obsi.textDim,
+                        )
                     }
-                    ObsiGhostButton(stringResourceCompat(R.string.versions_select), onClick = { onSelect(id) })
                     ObsiGhostButton(
                         stringResourceCompat(R.string.versions_delete),
-                        onClick = { onDelete(id) },
-                        enabled = id != selected,
+                        onClick = {
+                            app.instances.remove(instance.id)
+                        },
                     )
                 }
             }
@@ -192,7 +342,6 @@ private fun InstalledList(selected: String, onSelect: (String) -> Unit, onDelete
 private fun RemoteList(
     versions: List<McVersion>,
     loading: Boolean,
-    selected: String,
     onInstall: (McVersion) -> Unit,
 ) {
     val obsi = LocalObsi.current
@@ -217,16 +366,7 @@ private fun RemoteList(
                             color = obsi.textDim,
                         )
                     }
-                    if (v.id == selected) {
-                        Text(
-                            stringResourceCompat(R.string.versions_selected),
-                            color = obsi.accent,
-                            style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                    } else {
-                        ObsiButton(stringResourceCompat(R.string.versions_install), onClick = { onInstall(v) })
-                    }
+                    ObsiButton(stringResourceCompat(R.string.versions_install), onClick = { onInstall(v) })
                 }
             }
         }

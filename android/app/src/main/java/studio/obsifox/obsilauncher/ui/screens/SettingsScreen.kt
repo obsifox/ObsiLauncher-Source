@@ -55,6 +55,7 @@ fun SettingsScreen() {
     val installing by app.runtimePacks.installing.collectAsState()
     val packProgress by app.runtimePacks.progress.collectAsState()
     val customWallpaper by app.settings.customWallpaper.collectAsState()
+    val language by app.settings.language.collectAsState()
 
     var packUrl by remember { mutableStateOf("") }
     var javaArgsDraft by remember(javaArgs) { mutableStateOf(javaArgs) }
@@ -158,6 +159,30 @@ fun SettingsScreen() {
             ObsiTextButton(stringResourceCompat(R.string.ok), onClick = { app.settings.javaArgsValue = javaArgsDraft })
         }
 
+        SectionTitle(stringResourceCompat(R.string.settings_language))
+        GlassCard {
+            listOf(
+                "system" to stringResourceCompat(R.string.lang_system),
+                "en" to stringResourceCompat(R.string.lang_en),
+                "fa" to stringResourceCompat(R.string.lang_fa),
+            ).forEach { (code, label) ->
+                Row(modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)) {
+                    ObsiGhostButton(
+                        text = if (language == code) "● $label" else "○ $label",
+                        onClick = {
+                            if (language != code) {
+                                app.settings.languageValue = code
+                                (context as? android.app.Activity)?.recreate()
+                            }
+                        },
+                        enabled = language != code,
+                    )
+                }
+            }
+        }
+
         SectionTitle(stringResourceCompat(R.string.settings_runtime))
         GlassCard {
             Text(
@@ -221,6 +246,13 @@ fun SettingsScreen() {
                 color = obsi.textDim,
                 modifier = Modifier.padding(top = 10.dp),
             )
+        }
+
+        SectionTitle(stringResourceCompat(R.string.nav_about))
+        GlassCard {
+            Text(stringResourceCompat(R.string.about_free), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResourceCompat(R.string.about_credit), style = MaterialTheme.typography.bodyMedium, color = obsi.textDim)
+            Text(stringResourceCompat(R.string.about_license), style = MaterialTheme.typography.labelMedium, color = obsi.textDim)
         }
     }
 }

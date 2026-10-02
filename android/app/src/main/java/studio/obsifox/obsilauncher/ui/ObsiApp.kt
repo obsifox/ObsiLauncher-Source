@@ -1,10 +1,8 @@
 package studio.obsifox.obsilauncher.ui
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -18,32 +16,38 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.launch
 import studio.obsifox.obsilauncher.R
 import studio.obsifox.obsilauncher.app
-import studio.obsifox.obsilauncher.core.game.GameState
 import studio.obsifox.obsilauncher.ui.screens.AboutScreen
 import studio.obsifox.obsilauncher.ui.screens.AccountsScreen
+import studio.obsifox.obsilauncher.ui.screens.BrowseScreen
 import studio.obsifox.obsilauncher.ui.screens.ConsoleScreen
 import studio.obsifox.obsilauncher.ui.screens.HomeScreen
+import studio.obsifox.obsilauncher.ui.screens.InstanceDetailScreen
 import studio.obsifox.obsilauncher.ui.screens.SettingsScreen
 import studio.obsifox.obsilauncher.ui.screens.VersionsScreen
-import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 import studio.obsifox.obsilauncher.ui.screens.stringResourceCompat
+import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
 enum class Screen(val titleRes: Int) {
     HOME(R.string.nav_home),
     VERSIONS(R.string.nav_versions),
+    BROWSE(R.string.nav_browse),
     ACCOUNTS(R.string.nav_accounts),
-    CONSOLE(R.string.nav_console),
     SETTINGS(R.string.nav_settings),
     ABOUT(R.string.nav_about),
+}
+
+/** Secondary destinations on top of the tab bar. */
+sealed class Overlay {
+    data object None : Overlay()
+    data object Console : Overlay()
+    data object InstanceDetail : Overlay()
 }
 
 @Composable
@@ -52,13 +56,14 @@ fun ObsiApp() {
     val app = context.app
     val obsi = LocalObsi.current
     var screen by remember { mutableStateOf(Screen.HOME) }
+    var overlay by remember { mutableStateOf<Overlay>(Overlay.None) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val selected by app.settings.selectedVersion.collectAsState()
-    val blur by app.settings.blur.collectAsState()
     val gameState by app.gameManager.state.collectAsState()
     val wallpaperActive by app.wallpaper.active.collectAsState()
 
-    // wallpaper follows the selected version
+    // wallpaper follows the active instance's version
     LaunchedEffect(selected) {
         app.wallpaper.sync(selected.ifBlank { null })
     }
@@ -66,26 +71,28 @@ fun ObsiApp() {
     Scaffold(
         containerColor = Color.Transparent,
         bottomBar = {
-            NavigationBar(containerColor = Color.Transparent) {
-                Screen.entries.forEach { entry ->
-                    NavigationBarItem(
-                        selected = screen == entry,
-                        onClick = { screen = entry },
-                        icon = {
-                            Text(
-                                text = screenIcon(entry),
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                        },
-                        label = { Text(stringResource(entry.titleRes), style = MaterialTheme.typography.labelMedium) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = obsi.accent,
-                            selectedTextColor = obsi.accent,
-                            indicatorColor = obsi.accentDim,
-                            unselectedIconColor = obsi.textDim,
-                            unselectedTextColor = obsi.textDim,
-                        ),
-                    )
+            if (overlay == Overlay.None) {
+                NavigationBar(containerColor = Color.Transparent) {
+                    Screen.entries.forEach { entry ->
+                        NavigationBarItem(
+                            selected = screen == entry,
+                            onClick = { screen = entry },
+                            icon = {
+                                Text(
+                                    text = screenIcon(entry),
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            },
+                            label = { Text(stringResource(entry.titleRes), style = MaterialTheme.typography.labelMedium) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = obsi.accent,
+                                selectedTextColor = obsi.accent,
+                                indicatorColor = obsi.accentDim,
+                                unselectedIconColor = obsi.textDim,
+                                unselectedTextColor = obsi.textDim,
+                            ),
+                        )
+                    }
                 }
             }
         },
@@ -95,28 +102,51 @@ fun ObsiApp() {
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f)) {
-                    when (screen) {
-                        Screen.HOME -> HomeScreen(
-                            onPlay = {
-                                val version = app.settings.selectedVersionValue
-                                val account = app.accounts.active()
-                                val pack = app.runtimePacks.packByName(app.settings.runtimePackValue)
-                                if (version.isNotBlank() && account != null && pack != null) {
-                                    app.gameManager.launch(context, version, account, pack)
-                                    screen = Screen.CONSOLE
+            when (overlay) {
+                Overlay.Console -> ConsoleScreen(onClose = { overlay = Overlay.None })
+                Overlay.InstanceDetail -> InstanceDetailScreen(onClose = { overlay = Overlay.None })
+                Overlay.None -> when (screen) {
+                    Screen.HOME -> HomeScreen(
+                        onPlay = {
+                            scope.launch {
+                                var account = app.accounts.active()
+                                // Microsoft tokens are refreshed silently when close to expiry
+                                if (account?.isMicrosoft == true &&
+                                    account.tokenExpiresAt < System.currentTimeMillis() + 10 * 60_000L
+                                ) {
+                                    try {
+                                        val refreshed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            app.microsoft.refresh(account.refreshToken)
+                                        }
+                                        app.accounts.upsertMicrosoft(
+                                            refreshed.name, refreshed.id, refreshed.accessToken,
+                                            refreshed.refreshToken, refreshed.expiresAtMs,
+                                        )
+                                        account = app.accounts.active()
+                                    } catch (_: Exception) {
+                                        // fall back to the stored token; the console shows auth errors
+                                    }
                                 }
-                            },
-                            onPickVersion = { screen = Screen.VERSIONS },
-                            onPickAccount = { screen = Screen.ACCOUNTS },
-                        )
-                        Screen.VERSIONS -> VersionsScreen()
-                        Screen.ACCOUNTS -> AccountsScreen()
-                        Screen.CONSOLE -> ConsoleScreen()
-                        Screen.SETTINGS -> SettingsScreen()
-                        Screen.ABOUT -> AboutScreen()
-                    }
+                                val instance = app.instances.active()
+                                val pack = app.runtimePacks.packByName(app.settings.runtimePackValue)
+                                    ?: app.runtimePacks.packs.value.firstOrNull()
+                                if (instance != null && account != null && pack != null) {
+                                    app.gameManager.launch(context, instance, account, pack)
+                                    overlay = Overlay.Console
+                                }
+                            }
+                        },
+                        onPickVersion = { screen = Screen.VERSIONS },
+                        onPickAccount = { screen = Screen.ACCOUNTS },
+                        onOpenConsole = { overlay = Overlay.Console },
+                        onOpenInstance = { overlay = Overlay.InstanceDetail },
+                        onOpenBrowse = { screen = Screen.BROWSE },
+                    )
+                    Screen.VERSIONS -> VersionsScreen()
+                    Screen.BROWSE -> BrowseScreen()
+                    Screen.ACCOUNTS -> AccountsScreen()
+                    Screen.SETTINGS -> SettingsScreen()
+                    Screen.ABOUT -> AboutScreen()
                 }
             }
         }
@@ -126,8 +156,8 @@ fun ObsiApp() {
 private fun screenIcon(screen: Screen): String = when (screen) {
     Screen.HOME -> "⌂"
     Screen.VERSIONS -> "❖"
+    Screen.BROWSE -> "⬢"
     Screen.ACCOUNTS -> "☻"
-    Screen.CONSOLE -> "▤"
     Screen.SETTINGS -> "⚙"
     Screen.ABOUT -> "✦"
 }

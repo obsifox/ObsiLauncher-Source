@@ -7,14 +7,36 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-/** A player profile. Offline-only by design: free, no Microsoft account needed. */
+/**
+ * A player profile. Offline profiles are the default (free, no Microsoft
+ * account needed); Microsoft profiles use the free device-code flow.
+ * [skinPath]/[capePath] power the local-only custom skin & cape feature —
+ * they are applied client-side so only this player sees them.
+ */
 data class Account(
     val id: String,
     val name: String,
-    val type: String = "offline", // reserved for future auth backends
+    val type: String = TYPE_OFFLINE,   // offline | microsoft
+    val uuid: String = "",             // real uuid for Microsoft profiles
+    val accessToken: String = "",
+    val refreshToken: String = "",
+    val tokenExpiresAt: Long = 0,
+    val skinPath: String = "",
+    val capePath: String = "",
+    val skinModel: String = "",        // classic | slim (offline pick)
+    val localSkinEnabled: Boolean = false,
 ) {
     /** Same UUID recipe the game itself uses for offline players. */
-    fun offlineUuid(): String = UUID.nameUUIDFromBytes("OfflinePlayer:$name".toByteArray()).toString()
+    fun offlineUuid(): String =
+        if (type == TYPE_MICROSOFT && uuid.isNotEmpty()) uuid
+        else UUID.nameUUIDFromBytes("OfflinePlayer:$name".toByteArray()).toString()
+
+    val isMicrosoft: Boolean get() = type == TYPE_MICROSOFT
+
+    companion object {
+        const val TYPE_OFFLINE = "offline"
+        const val TYPE_MICROSOFT = "microsoft"
+    }
 }
 
 class AccountStore(context: Context) {
@@ -38,11 +60,32 @@ class AccountStore(context: Context) {
             id = UUID.randomUUID().toString(),
             name = trimmed,
         )
-        val next = accounts.value.filterNot { it.name.equals(trimmed, ignoreCase = true) } + account
+        val next = accounts.value.filterNot { it.name.equals(trimmed, ignoreCase = true) && it.type == Account.TYPE_OFFLINE } + account
         accounts.value = next
         activeId.value = account.id
         persist()
         return account
+    }
+
+    /** Insert / replace a Microsoft profile after a successful device-flow login. */
+    fun upsertMicrosoft(name: String, uuid: String, accessToken: String, refreshToken: String, expiresAt: Long): Account {
+        val existing = accounts.value.firstOrNull { it.type == Account.TYPE_MICROSOFT && it.uuid == uuid }
+        val account = (existing ?: Account(UUID.randomUUID().toString(), name, Account.TYPE_MICROSOFT)).copy(
+            name = name,
+            uuid = uuid,
+            accessToken = accessToken,
+            refreshToken = refreshToken,
+            tokenExpiresAt = expiresAt,
+        )
+        accounts.value = accounts.value.filterNot { it.id == account.id } + account
+        activeId.value = account.id
+        persist()
+        return account
+    }
+
+    fun update(id: String, transform: (Account) -> Account) {
+        accounts.value = accounts.value.map { if (it.id == id) transform(it) else it }
+        persist()
     }
 
     fun setActive(id: String) {
@@ -67,7 +110,15 @@ class AccountStore(context: Context) {
                 list += Account(
                     id = a.optString("id"),
                     name = a.optString("name"),
-                    type = a.optString("type", "offline"),
+                    type = a.optString("type", Account.TYPE_OFFLINE),
+                    uuid = a.optString("uuid"),
+                    accessToken = a.optString("access_token"),
+                    refreshToken = a.optString("refresh_token"),
+                    tokenExpiresAt = a.optLong("token_expires_at"),
+                    skinPath = a.optString("skin_path"),
+                    capePath = a.optString("cape_path"),
+                    skinModel = a.optString("skin_model", "classic"),
+                    localSkinEnabled = a.optBoolean("local_skin_enabled", false),
                 )
             }
             accounts.value = list
@@ -82,7 +133,24 @@ class AccountStore(context: Context) {
             .put("active", activeId.value)
             .put(
                 "accounts",
-                JSONArray().apply { accounts.value.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("type", it.type)) } },
+                JSONArray().apply {
+                    accounts.value.forEach {
+                        put(
+                            JSONObject()
+                                .put("id", it.id)
+                                .put("name", it.name)
+                                .put("type", it.type)
+                                .put("uuid", it.uuid)
+                                .put("access_token", it.accessToken)
+                                .put("refresh_token", it.refreshToken)
+                                .put("token_expires_at", it.tokenExpiresAt)
+                                .put("skin_path", it.skinPath)
+                                .put("cape_path", it.capePath)
+                                .put("skin_model", it.skinModel)
+                                .put("local_skin_enabled", it.localSkinEnabled),
+                        )
+                    }
+                },
             )
         file.writeText(root.toString(2))
     }

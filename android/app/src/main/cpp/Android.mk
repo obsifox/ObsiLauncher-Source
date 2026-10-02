@@ -6,5 +6,5 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 LOCAL_MODULE := obsibridge
 LOCAL_SRC_FILES := obsibridge.c
-LOCAL_CFLAGS := -O2 -Wall
+LOCAL_CFLAGS := -O2 -Wall -D_GNU_SOURCE
 include $(BUILD_SHARED_LIBRARY)
