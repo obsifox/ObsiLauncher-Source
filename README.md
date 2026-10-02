@@ -35,6 +35,7 @@ The builds are on the **[Releases → Nightly builds](https://github.com/obsifox
 |---|---|
 | ![Home](docs/assets/screens/home-en.png) | ![خانه](docs/assets/screens/home-fa.png) |
 | ![Modrinth](docs/assets/screens/modrinth-en.png) | ![مودها](docs/assets/screens/profile-mods-fa.png) |
+| ![Update gate](docs/assets/screens/gate-en.png) | ![ویزارد اولین اجرا](docs/assets/screens/wizard-fa.png) |
 
 ## Download
 
