@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Obsi Launcher</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_versions">Versions</string>
+    <string name="nav_accounts">Accounts</string>
+    <string name="nav_console">Console</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_about">About</string>
+
+    <string name="home_play">Play</string>
+    <string name="home_no_version">No version selected — pick one in Versions</string>
+    <string name="home_no_account">No account — add an offline profile in Accounts</string>
+    <string name="home_version_ready">%1$s is ready to play</string>
+    <string name="home_missing_runtime">Runtime pack missing — install it from Settings → Runtime</string>
+    <string name="home_wallpaper_note">Background artwork for the selected version is fetched from minecraft.net</string>
+    <string name="home_launching">Starting %1$s…</string>
+
+    <string name="versions_installed">Installed</string>
+    <string name="versions_releases">Releases</string>
+    <string name="versions_snapshots">Snapshots</string>
+    <string name="versions_old">Old</string>
+    <string name="versions_install">Install</string>
+    <string name="versions_delete">Delete</string>
+    <string name="versions_select">Select</string>
+    <string name="versions_selected">Selected</string>
+    <string name="versions_empty_remote">Pull to refresh the version list</string>
+    <string name="versions_empty_installed">Nothing installed yet</string>
+    <string name="versions_old_hint">Old-beta and old-alpha versions are included below</string>
+
+    <string name="accounts_title">Player profiles</string>
+    <string name="accounts_offline_hint">Offline profile — the player name is what other players see. Free, no Microsoft account needed.</string>
+    <string name="accounts_add">Add offline profile</string>
+    <string name="accounts_name_hint">Player name</string>
+    <string name="accounts_active">Active</string>
+    <string name="accounts_set_active">Set active</string>
+    <string name="accounts_remove">Remove</string>
+    <string name="accounts_empty">No profiles yet</string>
+
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme_dynamic">Obsi Dynamic (colours from wallpaper)</string>
+    <string name="settings_theme_obsidian">Obsidian Fox</string>
+    <string name="settings_theme_vanilla">Vanilla Green</string>
+    <string name="settings_theme_white">Crystal White</string>
+    <string name="settings_blur">Background blur</string>
+    <string name="settings_custom_wallpaper">Custom background</string>
+    <string name="settings_custom_wallpaper_hint">Pick any image — it overrides version wallpapers until cleared</string>
+    <string name="settings_pick_image">Pick image</string>
+    <string name="settings_clear_image">Clear</string>
+
+    <string name="settings_launcher">Launcher</string>
+    <string name="settings_memory">Memory for the game (MB)</string>
+    <string name="settings_java_args">Extra JVM arguments</string>
+    <string name="settings_show_logs">Console</string>
+
+    <string name="settings_runtime">Runtime</string>
+    <string name="settings_runtime_hint">ObsiLauncher runs the game through a runtime pack: a JVM for Android plus LWJGL/MobileGlues natives, packaged as a .tar.xz with a pack.json. Install one per architecture.</string>
+    <string name="settings_runtime_url">Runtime pack URL (.tar.xz)</string>
+    <string name="settings_runtime_install">Download &amp; install</string>
+    <string name="settings_runtime_none">No runtime pack installed</string>
+    <string name="settings_runtime_ok">Installed: %1$s</string>
+    <string name="settings_runtime_docs">Pack format and ready-made packs are documented in the repository (docs/RUNTIME-PACKS.md).</string>
+
+    <string name="about_title">About</string>
+    <string name="about_free">Free &amp; open — no key, no locked features</string>
+    <string name="about_credit">Uses MobileGlues for OpenGL rendering</string>
+    <string name="about_license">GPL-3.0-or-later · unofficial, not affiliated with Mojang or Microsoft</string>
+    <string name="about_version">Version %1$s</string>
+
+    <string name="console_title">Game console</string>
+    <string name="console_empty">The game log appears here after launch</string>
+    <string name="console_stop">Stop game</string>
+    <string name="console_running">Running</string>
+    <string name="console_stopped">Not running</string>
+    <string name="console_exit_code">Game exited with code %1$d</string>
+
+    <string name="dl_installing">Installing %1$s</string>
+    <string name="dl_step_manifest">Fetching version metadata…</string>
+    <string name="dl_step_client">Downloading client jar…</string>
+    <string name="dl_step_libraries">Downloading libraries… (%1$d/%2$d)</string>
+    <string name="dl_step_natives">Extracting native libraries…</string>
+    <string name="dl_step_assets">Downloading assets… (%1$d/%2$d)</string>
+    <string name="dl_done">Installed %1$s</string>
+    <string name="dl_failed">Failed: %1$s</string>
+    <string name="dl_retry">Retry</string>
+    <string name="dl_cancel">Cancel</string>
+
+    <string name="err_no_network">No network connection</string>
+    <string name="err_generic">Something went wrong: %1$s</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+</resources>

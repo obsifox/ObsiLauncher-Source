@@ -4,7 +4,7 @@
 <p align="center">A multi-profile launcher for <b>Minecraft: Java Edition</b> with built-in Modrinth, for <b>Android</b>, <b>Windows</b> and <b>Linux</b>.</p>
 <p align="center"><a href="README.fa.md">فارسی</a></p>
 
-> Public repository · version `1.2.0`. *Not affiliated with Mojang AB or Microsoft.* **Free for everyone — no access key, no locked features.**
+> Public repository · version `1.3.0`. *Not affiliated with Mojang AB or Microsoft.* **Free for everyone — no access key, no locked features.**
 
 ## ⬇ Download
 

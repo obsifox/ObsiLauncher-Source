@@ -1,5 +1,0 @@
-# Pinned upstream for the Android build (ZalithLauncher2, GPL-3.0 + Section 7 additional terms).
-# Bump by changing the tag + commit, then re-run the Android workflow.
-UPSTREAM_REPO=https://github.com/ZalithLauncher/ZalithLauncher2.git
-UPSTREAM_TAG=2.6.1
-UPSTREAM_COMMIT=ed872ebf53ef21800584ac435aa900c3220750c7

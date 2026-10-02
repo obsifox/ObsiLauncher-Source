@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ابسی لانچر</string>
+    <string name="nav_home">خانه</string>
+    <string name="nav_versions">نسخه‌ها</string>
+    <string name="nav_accounts">حساب‌ها</string>
+    <string name="nav_console">کنسول</string>
+    <string name="nav_settings">تنظیمات</string>
+    <string name="nav_about">درباره</string>
+
+    <string name="home_play">بازی کن</string>
+    <string name="home_no_version">نسخه‌ای انتخاب نشده — از بخش نسخه‌ها انتخاب کنید</string>
+    <string name="home_no_account">حسابی نیست — در بخش حساب‌ها یک پروفایل بسازید</string>
+    <string name="home_version_ready">‏%1$s آماده‌ی بازی است</string>
+    <string name="home_missing_runtime">پک ران‌تایم نصب نیست — از تنظیمات ← ران‌تایم نصبش کنید</string>
+    <string name="home_wallpaper_note">پس‌زمینه‌ی نسخه‌ی انتخاب‌شده از minecraft.net دریافت می‌شود</string>
+    <string name="home_launching">در حال اجرای %1$s…</string>
+
+    <string name="versions_installed">نصب‌شده</string>
+    <string name="versions_releases">پایدار</string>
+    <string name="versions_snapshots">اسنپ‌شات</string>
+    <string name="versions_old">قدیمی</string>
+    <string name="versions_install">نصب</string>
+    <string name="versions_delete">حذف</string>
+    <string name="versions_select">انتخاب</string>
+    <string name="versions_selected">انتخاب‌شده</string>
+    <string name="versions_empty_remote">برای بروزرسانی فهرست، بکشید</string>
+    <string name="versions_empty_installed">هنوز چیزی نصب نشده</string>
+    <string name="versions_old_hint">نسخه‌های old-beta و old-alpha هم در ادامه هستند</string>
+
+    <string name="accounts_title">پروفایل‌های بازیکن</string>
+    <string name="accounts_offline_hint">پروفایل آفلاین — نامی که بقیه‌ی بازیکنان می‌بینند. رایگان و بدون نیاز به حساب مایکروسافت.</string>
+    <string name="accounts_add">افزودن پروفایل آفلاین</string>
+    <string name="accounts_name_hint">نام بازیکن</string>
+    <string name="accounts_active">فعال</string>
+    <string name="accounts_set_active">فعال‌سازی</string>
+    <string name="accounts_remove">حذف</string>
+    <string name="accounts_empty">هنوز پروفایلی نیست</string>
+
+    <string name="settings_appearance">ظاهر</string>
+    <string name="settings_theme_dynamic">ابسی داینامیک (رنگ از پس‌زمینه)</string>
+    <string name="settings_theme_obsidian">روباه ابسیدین</string>
+    <string name="settings_theme_vanilla">سبز ونیلا</string>
+    <string name="settings_theme_white">سفید کریستالی</string>
+    <string name="settings_blur">محو شدن پس‌زمینه</string>
+    <string name="settings_custom_wallpaper">پس‌زمینه‌ی دلخواه</string>
+    <string name="settings_custom_wallpaper_hint">هر تصویری انتخاب کنید — تا زمان پاک‌کردن، جایگزین کاغذدیواری نسخه‌ها می‌شود</string>
+    <string name="settings_pick_image">انتخاب تصویر</string>
+    <string name="settings_clear_image">پاک‌کردن</string>
+
+    <string name="settings_launcher">لانچر</string>
+    <string name="settings_memory">حافظه‌ی بازی (مگابایت)</string>
+    <string name="settings_java_args">آرگومان‌های اضافه‌ی JVM</string>
+    <string name="settings_show_logs">کنسول</string>
+
+    <string name="settings_runtime">ران‌تایم</string>
+    <string name="settings_runtime_hint">ابسی‌لانچر بازی را با یک «پک ران‌تایم» اجرا می‌کند: یک JVM مخصوص اندروید به‌همراه کتابخانه‌های LWJGL/MobileGlues، بسته‌بندی‌شده به‌صورت .tar.xz به‌همراه pack.json. برای هر معماری یک پک نصب کنید.</string>
+    <string name="settings_runtime_url">آدرس پک ران‌تایم (‎.tar.xz)</string>
+    <string name="settings_runtime_install">دانلود و نصب</string>
+    <string name="settings_runtime_none">پک ران‌تایمی نصب نیست</string>
+    <string name="settings_runtime_ok">نصب‌شده: %1$s</string>
+    <string name="settings_runtime_docs">قالب پک و پک‌های آماده در مخزن (docs/RUNTIME-PACKS.md) توضیح داده شده است.</string>
+
+    <string name="about_title">درباره</string>
+    <string name="about_free">رایگان و متن‌باز — بدون کلید و قابلیت قفل</string>
+    <string name="about_credit">برای رندر OpenGL از MobileGlues استفاده می‌شود</string>
+    <string name="about_license">GPL-3.0-or-later · غیررسمی و بدون وابستگی به Mojang یا Microsoft</string>
+    <string name="about_version">نسخه %1$s</string>
+
+    <string name="console_title">کنسول بازی</string>
+    <string name="console_empty">پس از اجرای بازی، لاگ اینجا نمایش داده می‌شود</string>
+    <string name="console_stop">توقف بازی</string>
+    <string name="console_running">در حال اجرا</string>
+    <string name="console_stopped">غیرفعال</string>
+    <string name="console_exit_code">بازی با کد %1$d خارج شد</string>
+
+    <string name="dl_installing">در حال نصب %1$s</string>
+    <string name="dl_step_manifest">دریافت اطلاعات نسخه…</string>
+    <string name="dl_step_client">دانلود jar بازی…</string>
+    <string name="dl_step_libraries">دانلود کتابخانه‌ها… (%1$d/%2$d)</string>
+    <string name="dl_step_natives">استخراج کتابخانه‌های سیستمی…</string>
+    <string name="dl_step_assets">دانلود منابع… (%1$d/%2$d)</string>
+    <string name="dl_done">‏%1$s نصب شد</string>
+    <string name="dl_failed">خطا: %1$s</string>
+    <string name="dl_retry">تلاش دوباره</string>
+    <string name="dl_cancel">لغو</string>
+
+    <string name="err_no_network">اتصال اینترنت نیست</string>
+    <string name="err_generic">مشکلی پیش آمد: %1$s</string>
+    <string name="ok">تأیید</string>
+    <string name="cancel">لغو</string>
+</resources>

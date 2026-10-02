@@ -1,13 +1,9 @@
 name: Android
 
-# ObsiLauncher for Android = pinned ZalithLauncher2 + our overlay (see android/README.md).
+# ObsiLauncher for Android — a standalone app written from scratch (no upstream overlay).
 on:
   workflow_dispatch:
     inputs:
-      arch:
-        description: "Target ABI: arm64 | arm | x86_64 | x86 | all"
-        required: false
-        default: "arm64"
       publish:
         description: "Upload the APK to the rolling 'nightly' pre-release"
         type: boolean
@@ -27,78 +23,36 @@ jobs:
   apk:
     name: Build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      ARCH: ${{ inputs.arch || 'arm64' }}
-      # Optional secrets (see docs/SETUP.md). Empty value = feature disabled at runtime.
-      OAUTH_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
-      CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v5
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: "temurin"
           java-version: "21"
 
-      - uses: gradle/actions/setup-gradle@v5
-        with:
-          add-job-summary: on-failure
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Fetch pinned upstream and apply the ObsiLauncher overlay
-        run: bash android/scripts/prepare.sh
-
-      - name: Release signing key
-        working-directory: android/.work/upstream
-        env:
-          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      - name: Build release APK (arm64-v8a)
+        working-directory: android
         run: |
-          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ]; then
-            echo "$KS_B64" | base64 -d > ZalithLauncher/zalith_launcher.jks
-            echo "STORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
-            echo "KEY_PASSWORD=$KS_PASS"   >> "$GITHUB_ENV"
-            echo "Using the project release keystore."
-          else
-            echo "::warning::No ANDROID_KEYSTORE_* secrets set -> using an EPHEMERAL signing key. Builds signed this way cannot be installed over each other."
-            P="$(openssl rand -hex 16)"
-            echo "::add-mask::$P"
-            keytool -genkeypair -keystore ZalithLauncher/zalith_launcher.jks -storetype PKCS12 \
-              -alias obsilauncher -keyalg RSA -keysize 3072 -validity 36500 \
-              -storepass "$P" -keypass "$P" -dname "CN=ObsiLauncher CI, O=ObsiFox Studio"
-            echo "STORE_PASSWORD=$P" >> "$GITHUB_ENV"
-            echo "KEY_PASSWORD=$P"   >> "$GITHUB_ENV"
-          fi
-
-      - name: Build release APK (${{ env.ARCH }})
-        working-directory: android/.work/upstream
-        run: |
-          VERSION="$(cat "$GITHUB_WORKSPACE/VERSION")"
-          CODE=$((100000 + GITHUB_RUN_NUMBER))
           chmod +x gradlew
-          ./gradlew ZalithLauncher:assembleRelease -Darch="$ARCH" \
-            -Plauncher_name=ObsiLauncher \
-            "-Plauncher_app_name=Obsi Launcher" \
-            -Plauncher_short_name=OBSI \
-            -Purl_home=https://github.com/obsifox/ObsiLauncher-Source \
-            -Plauncher_version_code="$CODE" \
-            "-Plauncher_version_name=${VERSION}-zl2.6.1" \
-            --stacktrace
+          ./gradlew :app:assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx3g"
 
-      - name: Collect APKs
-        run: |
-          mkdir -p dist
-          cp android/.work/upstream/ZalithLauncher/build/outputs/apk/release/*.apk dist/
-          ls -lh dist
-
-      - uses: actions/upload-artifact@v7
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: ObsiLauncher-android-${{ env.ARCH }}
-          path: dist/*.apk
-          retention-days: 3
+          name: ObsiLauncher-android-apk
+          path: android/app/build/outputs/apk/release/*.apk
 
-      - name: Publish (nightly pre-release, or the tag's release)
-        if: ${{ github.event_name == 'push' || inputs.publish }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash .github/scripts/publish.sh dist/*.apk
+      - name: Attach to rolling nightly
+        if: inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          prerelease: true
+          files: android/app/build/outputs/apk/release/*.apk
