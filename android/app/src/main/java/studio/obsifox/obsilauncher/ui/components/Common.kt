@@ -21,9 +21,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
@@ -55,6 +59,22 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     )
 }
 
+/**
+ * v1.11.0 — the chunky dark bottom bevel of the classic Minecraft button,
+ * painted OVER the rendered content (inset so the rounded corners stay clean).
+ * Every primary/secondary control wears it, matching the user's reference.
+ */
+fun Modifier.mcBevel(color: Color, height: Dp = 3.dp): Modifier = drawWithContent {
+    drawContent()
+    val h = height.toPx()
+    val inset = 1.5.dp.toPx()
+    drawRect(
+        color = color,
+        topLeft = Offset(inset, size.height - h),
+        size = Size(size.width - inset * 2, h),
+    )
+}
+
 /** Minecraft-style button: hard corners, dark edge, slight bottom bevel. */
 @Composable
 fun ObsiButton(
@@ -76,7 +96,10 @@ fun ObsiButton(
             disabledContentColor = obsi.textDim,
         ),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp),
-        modifier = modifier.border(1.dp, Color(0xFF1A1A1C), RoundedCornerShape(4.dp)),
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .mcBevel(if (danger) Color(0xFF5E2418) else Color(0xFF1C4712))
+            .border(1.dp, Color(0xFF1A1A1C), RoundedCornerShape(4.dp)),
     ) {
         Text(text, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
     }
@@ -100,7 +123,9 @@ fun ObsiGhostButton(
             disabledContentColor = obsi.textDim,
         ),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        modifier = modifier,
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .mcBevel(Color(0x54000000)),
     ) {
         Text(text, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
     }

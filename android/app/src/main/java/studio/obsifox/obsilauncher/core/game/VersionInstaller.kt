@@ -53,7 +53,7 @@ class VersionInstaller(private val context: Context) {
                 emit("manifest", 0, 1, null, progress)
                 val text = Http.get(version.url) ?: throw IllegalStateException("no metadata for ${version.id}")
                 versionJson(context, version.id).writeText(text)
-                installRest(version.id, JSONObject(text), settings, progress)
+                installAndVerify(version.id, JSONObject(text), settings, progress)
                 state.value = InstallState.Done(version.id)
             } catch (e: Exception) {
                 state.value = InstallState.Failed(e.message ?: e.javaClass.simpleName)
@@ -67,7 +67,7 @@ class VersionInstaller(private val context: Context) {
             try {
                 val jsonFile = versionJson(context, id)
                 if (!jsonFile.isFile) throw IllegalStateException("version json missing for $id")
-                installRest(id, JSONObject(jsonFile.readText()), settings, progress)
+                installAndVerify(id, JSONObject(jsonFile.readText()), settings, progress)
                 state.value = InstallState.Done(id)
             } catch (e: Exception) {
                 state.value = InstallState.Failed(e.message ?: e.javaClass.simpleName)
@@ -133,12 +133,115 @@ class VersionInstaller(private val context: Context) {
                         }
                     }
                 }
-                installRest(id, root, settings, progress)
+                installAndVerify(id, root, settings, progress)
                 state.value = InstallState.Done(id)
             } catch (e: Exception) {
                 state.value = InstallState.Failed(e.message ?: e.javaClass.simpleName)
             }
         }
+
+    /** One file that failed the final inspection. */
+    private data class BadFile(val url: String, val dest: File, val sha1: String?)
+
+    /**
+     * v1.11.0 — install, then INSPECT: every client jar, library and asset
+     * is checked against its published sha1/size. Whatever is missing or
+     * corrupt is deleted and re-downloaded — starting exactly from the first
+     * bad file — and the whole thing repeats until EVERY file is complete
+     * (max 3 passes, then a hard failure instead of a silent broken install).
+     *
+     * Pressing DOWNLOAD again on a half-installed version therefore resumes:
+     * good files are kept, bad files are fetched again.
+     */
+    private suspend fun installAndVerify(
+        id: String,
+        root: JSONObject,
+        settings: ObsiSettings,
+        progress: (InstallState) -> Unit,
+    ) {
+        var pass = 0
+        while (true) {
+            installRest(id, root, settings, progress)
+            pass += 1
+            emit("verify", 0, 1, null, progress)
+            val bad = inspectAll(id, root, progress)
+            if (bad.isEmpty()) return
+            if (pass >= 3) {
+                throw IllegalStateException("$id: ${bad.size} file(s) still failing verification")
+            }
+            bad.forEach { runCatching { it.dest.delete() } }
+        }
+    }
+
+    /**
+     * The final inspection the user asked for: is EVERY file really there
+     * and intact? Returns exactly the files that are not.
+     */
+    private fun inspectAll(id: String, root: JSONObject, progress: (InstallState) -> Unit): List<BadFile> {
+        val bad = ArrayList<BadFile>()
+
+        // client jar — this version and the inherited vanilla one
+        val chain = mutableListOf(id)
+        root.optString("inheritsFrom").takeIf { it.isNotEmpty() && it != id }?.let { chain.add(it) }
+        for (vid in chain) {
+            val vRoot = if (vid == id) root
+            else runCatching { JSONObject(versionJson(context, vid).readText()) }.getOrNull() ?: continue
+            vRoot.optJSONObject("downloads")?.optJSONObject("client")?.let { client ->
+                val jar = clientJar(context, vid)
+                val sha1 = client.optString("sha1").takeIf { it.length == 40 }
+                val broken = !jar.isFile || (sha1 != null && Http.sha1Of(jar) != sha1)
+                if (broken) bad += BadFile(client.optString("url"), jar, sha1)
+            }
+        }
+
+        // libraries — sha1 when published, size when known
+        val libRoot = Paths.librariesRoot(context)
+        val wanted = collectLibraries(root, id, progress)
+        wanted.forEachIndexed { index, lib ->
+            if (lib.url.startsWith("file://")) return@forEachIndexed
+            val dest = File(libRoot, lib.path)
+            val broken = when {
+                !dest.isFile || dest.length() == 0L -> true
+                lib.sha1 != null && Http.sha1Of(dest) != lib.sha1 -> true
+                lib.size > 0 && dest.length() != lib.size -> true
+                else -> false
+            }
+            if (broken) {
+                val url = when {
+                    lib.url.isNotEmpty() -> lib.url
+                    lib.coord.isNotEmpty() -> "${lib.repo.ifEmpty { defaultRepoFor(lib.coord) }}/${lib.path}"
+                    else -> null
+                }
+                if (url != null) bad += BadFile(url, dest, lib.sha1)
+            }
+            if (index % 64 == 0) emit("verify", index, wanted.size, index.toFloat() / wanted.size, progress)
+        }
+
+        // assets — the index carries an exact size for every object
+        val indexObj = root.optJSONObject("assetIndex")
+        if (indexObj != null) {
+            val indexId = indexObj.optString("id").ifEmpty { id }
+            val indexFile = File(Paths.assetsRoot(context), "indexes/$indexId.json")
+            if (indexFile.isFile) {
+                val objects = runCatching { JSONObject(indexFile.readText()).optJSONObject("objects") }.getOrNull()
+                if (objects != null) {
+                    val objectsRoot = File(Paths.assetsRoot(context), "objects")
+                    val keys = objects.keys().asSequence().toList()
+                    keys.forEachIndexed { index, key ->
+                        val obj = objects.getJSONObject(key)
+                        val hash = obj.getString("hash")
+                        val size = obj.optLong("size", 0L)
+                        val dest = File(objectsRoot, "${hash.substring(0, 2)}/$hash")
+                        if (!dest.isFile || (size > 0 && dest.length() != size)) {
+                            bad += BadFile("$RESOURCES/${hash.substring(0, 2)}/$hash", dest, hash)
+                        }
+                        if (index % 256 == 0) emit("verify", index, keys.size, index.toFloat() / keys.size, progress)
+                    }
+                }
+            }
+        }
+        return bad
+    }
 
     private suspend fun installRest(
         id: String,
@@ -181,7 +284,12 @@ class VersionInstaller(private val context: Context) {
         wanted.forEachIndexed { index, lib ->
             checkCancelled()
             val dest = File(libRoot, lib.path)
-            if (!dest.isFile || dest.length() == 0L) {
+            // v1.11.0: "already there" is not enough — an existing library is
+            // only skipped when its checksum matches, so resuming a broken
+            // download repairs the corrupt files instead of trusting them
+            val complete = dest.isFile && dest.length() > 0L &&
+                (lib.sha1 == null || Http.sha1Of(dest) == lib.sha1)
+            if (!complete) {
                 emit("libraries", index, wanted.size, index.toFloat() / wanted.size, progress)
                 if (lib.url.startsWith("file://")) {
                     val src = File(lib.url.removePrefix("file://"))

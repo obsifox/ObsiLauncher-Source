@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -106,31 +107,6 @@ fun HomeScreen(
         downloadProgress == null
 
     Box(Modifier.fillMaxSize()) {
-        // v1.10.0 — sound toggle for the bundled background video; it sits
-        // just under the floating top bar, on the end side, out of the way.
-        // Rendered before the empty-state branch so it is always available.
-        if (videoActive.isVideo) {
-            val muteDesc = stringResourceCompat(if (videoMuted) R.string.bg_unmute else R.string.bg_mute)
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 76.dp, end = 16.dp)
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x99140F0C))
-                    .border(1.dp, Color(0x24FFFFFF), CircleShape)
-                    .clickable { app.settings.videoMutedValue = !videoMuted }
-                    .semantics { contentDescription = muteDesc },
-                contentAlignment = Alignment.Center,
-            ) {
-                SpeakerIcon(
-                    muted = videoMuted,
-                    color = Color(0xFFF4EFEA),
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        }
-
         // empty state ----------------------------------------------------------
         if (instances.isEmpty()) {
             Column(
@@ -162,19 +138,29 @@ fun HomeScreen(
                         onClick = onPickVersion,
                     )
                 }
+                // v1.11.0 — the video sound toggle also lives here on a fresh
+                // install, where the dashboard row below does not exist yet
+                if (videoActive.isVideo) {
+                    Spacer(Modifier.height(14.dp))
+                    MuteButton(
+                        muted = videoMuted,
+                        onToggle = { app.settings.videoMutedValue = !videoMuted },
+                    )
+                }
             }
             return@Box
         }
 
-        // readability scrim over the wallpaper ----------------------------------
+        // readability scrim over the wallpaper (v1.11.0: a touch deeper so
+        // labels and pills stay readable on bright artwork — still sharp art)
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(200.dp)
+                .height(230.dp)
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color.Transparent, Color(0xB3140F0C)),
+                        listOf(Color.Transparent, Color(0x8C140F0C), Color(0xCC140F0C)),
                     ),
                 ),
         )
@@ -186,7 +172,9 @@ fun HomeScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 14.dp),
         ) {
-            // status / warning line — only when needed
+            // status / warning line — only when needed. v1.11.0: never during
+            // a running download (the big button IS the progress indicator,
+            // the old chip used to collide with the floating top bar)
             when {
                 gameState == GameState.RUNNING || gameState == GameState.PREPARING -> {
                     StatusChip(
@@ -200,7 +188,7 @@ fun HomeScreen(
                         onAction = onOpenConsole,
                     )
                 }
-                !canPlay -> {
+                !canPlay && downloadProgress == null && runningLoader == null -> {
                     StatusChip(
                         text = when {
                             !hasVersion -> stringResourceCompat(R.string.home_no_version)
@@ -222,7 +210,9 @@ fun HomeScreen(
                     )
                 }
             }
-            if (gameState == GameState.RUNNING || gameState == GameState.PREPARING || !canPlay) {
+            if (gameState == GameState.RUNNING || gameState == GameState.PREPARING ||
+                (!canPlay && downloadProgress == null && runningLoader == null)
+            ) {
                 Spacer(Modifier.height(8.dp))
             }
 
@@ -252,9 +242,18 @@ fun HomeScreen(
             Row(verticalAlignment = Alignment.Bottom) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier.padding(bottom = 6.dp),
                 ) {
+                    // v1.11.0 — the video sound toggle lives with the other
+                    // dashboard controls now: always visible, never overlapping
+                    // the floating top bar, on either language side
+                    if (videoActive.isVideo) {
+                        MuteButton(
+                            muted = videoMuted,
+                            onToggle = { app.settings.videoMutedValue = !videoMuted },
+                        )
+                    }
                     // version chip → Versions screen — grass block for vanilla,
                     // the loader's own mark for loader builds
                     Row(
@@ -300,10 +299,17 @@ fun HomeScreen(
 }
 
 /**
- * The big bottom-right button — PLAY when ready, DOWNLOAD otherwise.
- * While a download runs the button fills with blue from the language's
- * start side (right for Farsi, left for English) and turns fully green
- * the moment the game is ready.
+ * The big bottom-right button — PLAY when ready, DOWNLOAD otherwise —
+ * drawn exactly like the classic Minecraft button the user picked as the
+ * reference: flat green face, hard dark border, a chunky dark bevel along
+ * the bottom edge and bold white text.
+ *
+ * v1.11.0 fix: the button has a FIXED height. The download fill is painted
+ * with drawBehind, so it can never stretch the layout (the old fillMaxHeight
+ * fill box used to swallow all free vertical space and push the whole
+ * dashboard up under the top bar). The fill still grows from the language's
+ * start corner — right side in Farsi (RTL), left side in English (LTR) —
+ * and the button turns fully green the moment the game is ready.
  */
 @Composable
 private fun PlayButton(
@@ -315,35 +321,75 @@ private fun PlayButton(
     onClick: () -> Unit,
 ) {
     val obsi = LocalObsi.current
-    val container = when {
-        progress != null -> Color(0xFF2E2E32)             // dark base under the blue fill
-        ready -> obsi.accent                              // Minecraft green
-        enabled -> Color(0xFF6E6E72)                      // gray: not downloaded
-        else -> Color(0xFF49494D)
+    // fixed geometry — the button can never grow beyond this, no matter
+    // what the progress fill does
+    val height = 78.dp
+    val bevel = 5.dp
+    val corner = 8.dp
+    val shape = RoundedCornerShape(corner)
+
+    val faceTop: Color
+    val faceBottom: Color
+    val bevelColor: Color
+    val contentColor: Color
+    when {
+        progress != null -> {          // downloading: charcoal face + blue fill
+            faceTop = Color(0xFF3A3A40); faceBottom = Color(0xFF2A2A2E)
+            bevelColor = Color(0xFF101012); contentColor = Color.White
+        }
+        ready -> {                     // ready: the Minecraft green from the reference
+            faceTop = Color(0xFF5FAF3C); faceBottom = Color(0xFF3C8527)
+            bevelColor = Color(0xFF1C4712); contentColor = Color.White
+        }
+        enabled -> {                   // not downloaded yet: neutral gray
+            faceTop = Color(0xFF8A8A8F); faceBottom = Color(0xFF606065)
+            bevelColor = Color(0xFF2A2A2E); contentColor = Color.White
+        }
+        else -> {                      // disabled
+            faceTop = Color(0xFF54545A); faceBottom = Color(0xFF46464C)
+            bevelColor = Color(0xFF202024); contentColor = Color(0xFFC9C9CC)
+        }
     }
-    val contentColor = if (ready || enabled || progress != null) Color.White else Color(0xFFC9C9CC)
+    val fillColor = if (progress != null && progress >= 1f) Color(0xFF3C8527) else Color(0xFF3B79C4)
+
     Box(
         Modifier
-            .widthIn(min = 210.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(container)
-            .border(1.dp, Color(0xFF17181A), RoundedCornerShape(10.dp))
+            .widthIn(min = 230.dp)
+            .height(height)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(faceTop, faceBottom)))
+            .border(1.dp, Color(0xFF17181A), shape)
+            .drawBehind {
+                // the dark 3D bevel along the bottom edge — the Minecraft look
+                val b = bevel.toPx()
+                drawRect(bevelColor, topLeft = Offset(0f, size.height - b), size = Size(size.width, b))
+            }
             .clickable(enabled = enabled, onClick = onClick),
     ) {
-        // the fill: grows from the START corner — right side in Farsi (RTL),
-        // left side in English (LTR) — and switches green when complete
+        // the progress fill — painted UNDER the text, from the START side
+        // (right in Farsi, left in English), never affecting measurement
         if (progress != null) {
+            val fraction = progress.coerceIn(0f, 1f)
             Box(
                 Modifier
-                    .align(Alignment.CenterStart)
-                    .fillMaxWidth(progress.coerceIn(0f, 1f))
-                    .fillMaxHeight()
-                    .background(if (progress >= 1f) obsi.accent else Color(0xFF2F6FBE)),
+                    .matchParentSize()
+                    .drawBehind {
+                        val w = size.width * fraction
+                        val start = when (layoutDirection) {
+                            androidx.compose.ui.unit.LayoutDirection.Rtl -> size.width - w
+                            else -> 0f
+                        }
+                        drawRect(fillColor, topLeft = Offset(start, 0f), size = Size(w, size.height))
+                        // keep the bevel visible above the fill
+                        val b = bevel.toPx()
+                        drawRect(bevelColor, topLeft = Offset(0f, size.height - b), size = Size(size.width, b))
+                    },
             )
         }
         Column(
-            Modifier.padding(horizontal = 30.dp, vertical = 12.dp),
+            Modifier.fillMaxHeight().padding(horizontal = 28.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
             Text(
                 text = label,
@@ -351,6 +397,7 @@ private fun PlayButton(
                 fontWeight = FontWeight.Black,
                 letterSpacing = 3.sp,
                 color = contentColor,
+                maxLines = 1,
             )
             if (progress != null) {
                 Text(
@@ -363,11 +410,33 @@ private fun PlayButton(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelMedium,
-                    color = contentColor.copy(alpha = 0.8f),
+                    color = contentColor.copy(alpha = 0.85f),
                     maxLines = 1,
                 )
             }
         }
+    }
+}
+
+/** v1.11.0 — round speaker toggle for the bundled video, dashboard-sized. */
+@Composable
+private fun MuteButton(muted: Boolean, onToggle: () -> Unit) {
+    val muteDesc = stringResourceCompat(if (muted) R.string.bg_unmute else R.string.bg_mute)
+    Box(
+        Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(Color(0x99140F0C))
+            .border(1.dp, Color(0x33FFFFFF), CircleShape)
+            .clickable(onClick = onToggle)
+            .semantics { contentDescription = muteDesc },
+        contentAlignment = Alignment.Center,
+    ) {
+        SpeakerIcon(
+            muted = muted,
+            color = Color(0xFFF4EFEA),
+            modifier = Modifier.size(19.dp),
+        )
     }
 }
 

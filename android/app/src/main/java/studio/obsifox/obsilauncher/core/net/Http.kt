@@ -87,7 +87,7 @@ object Http {
         conn.connectTimeout = CONNECT_TIMEOUT
         conn.readTimeout = READ_TIMEOUT
         conn.instanceFollowRedirects = true
-        conn.setRequestProperty("User-Agent", "ObsiLauncher/1.10.0 (free, GPL-3.0)")
+        conn.setRequestProperty("User-Agent", "ObsiLauncher/1.11.0 (free, GPL-3.0)")
         conn.setRequestProperty("Accept", "application/json, */*")
         return conn
     }

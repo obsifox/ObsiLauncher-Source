@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    v1.11.0 fix: this color previously lived in res/drawable/ as a
+    <resources> file, which broke adaptive-icon inflation at runtime —
+    launchers showed no icon at all. Colors belong in values/.
+-->
+<resources>
+    <color name="ic_launcher_background">#52A535</color>
+</resources>

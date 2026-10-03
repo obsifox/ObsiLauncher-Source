@@ -25,6 +25,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -65,54 +66,85 @@ class ObsiWallpaper(private val context: Context, val settings: ObsiSettings) {
 
     private val latestRelease = MutableStateFlow("")
 
-    /** Call whenever the selected version changes (and once at startup). */
+    /** keeps the newest sync alive — an older, slower sync must never win. */
+    private var syncJob: Job? = null
+
+    /** artwork resolved per version this session — instant re-switching. */
+    private val resolved = HashMap<String, Active>()
+
+    /**
+     * Call whenever the selected version changes (and once at startup).
+     *
+     * v1.11.0 — the switch is now INSTANT: the bundled per-era artwork is
+     * published immediately, before any network call, and the heavyweight
+     * minecraft.net pack (manifest fetch + zip download) only *upgrades*
+     * the background afterwards. Switching 1.12.2 -> 1.16.5 no longer
+     * waits on Mojang or on a wallpaper download.
+     */
     fun sync(versionId: String?) {
-        CoroutineScope(Dispatchers.IO).launch {
+        syncJob?.cancel()
+        syncJob = CoroutineScope(Dispatchers.IO).launch {
             apply(context, settings, versionId)
         }
     }
 
     private suspend fun apply(context: Context, settings: ObsiSettings, versionId: String?) =
         withContext(Dispatchers.IO) {
-            // offline fallback keeps the video gate alive when Mojang's
-            // manifest is unreachable — 26.3 is the release the user pinned
-            val latest = fetchLatestRelease().ifBlank { FALLBACK_LATEST }
-
+            // ---- 1) INSTANT pass: everything that needs zero network -------
             val custom = settings.customWallpaperValue
             if (custom.isNotBlank() && File(custom).isFile) {
                 publish(Active(false, custom), extractAccent(File(custom)))
                 return@withContext
             }
 
-            // Video background (v1.10.0): the trailer is bundled — nothing to
-            // download anymore. It plays only for the latest release when the
-            // user picked the video mode; the wallpaper art is resolved too so
-            // the 45 s rest phase has something sharp to show.
-            if (settings.backgroundModeValue == BackgroundMode.VIDEO &&
+            val cachedLatest = latestRelease.value.ifBlank { FALLBACK_LATEST }
+            val videoNow = settings.backgroundModeValue == BackgroundMode.VIDEO &&
+                versionId != null && versionId == cachedLatest
+            val cacheKey = "${versionId ?: "none"}|${if (videoNow) "v" else "w"}"
+            resolved[cacheKey]?.let {
+                publish(it, it.imagePath?.let { p -> extractAccent(File(p)) } ?: accent.value)
+                return@withContext
+            }
+            // bundled era art covers every version offline — publish it NOW
+            publish(
+                Active(
+                    isVideo = videoNow,
+                    imagePath = null,
+                    resId = bundledArtFor(versionId),
+                ),
+                accent.value,
+            )
+
+            // ---- 2) UPGRADE pass: network-dependent, best effort -----------
+            val latest = fetchLatestRelease().ifBlank { FALLBACK_LATEST }
+            val video = settings.backgroundModeValue == BackgroundMode.VIDEO &&
                 versionId != null && versionId == latest
-            ) {
+
+            if (video) {
                 val artwork = ensureArtwork(packForVersion(versionId, latest), versionId)
                 val acc = artwork?.let(::extractAccent) ?: accent.value
-                publish(
-                    Active(
-                        isVideo = true,
-                        imagePath = artwork?.absolutePath,
-                        resId = if (artwork == null) bundledArtFor(versionId) else null,
-                    ),
-                    acc,
+                val state = Active(
+                    isVideo = true,
+                    imagePath = artwork?.absolutePath,
+                    resId = if (artwork == null) bundledArtFor(versionId) else null,
                 )
+                resolved[cacheKey] = state
+                publish(state, acc)
                 return@withContext
+            }
+
+            // the remote latest release differs from the cached one and flips
+            // the video gate off — re-publish the plain wallpaper instantly
+            if (!video && videoNow) {
+                publish(Active(false, null, bundledArtFor(versionId)), accent.value)
             }
 
             val packDir = packForVersion(versionId, latest)
             val artwork = ensureArtwork(packDir, versionId)
-            if (artwork == null) {
-                // minecraft.net unreachable / no packs yet: always show SOMETHING —
-                // the bundled era artwork keeps the launcher alive offline
-                publish(Active(false, null, bundledArtFor(versionId)), accent.value)
-                return@withContext
-            }
-            publish(Active(false, artwork.absolutePath), extractAccent(artwork))
+            if (artwork == null) return@withContext // keep the bundled art
+            val state = Active(false, artwork.absolutePath)
+            resolved[cacheKey] = state
+            publish(state, extractAccent(artwork))
         }
 
     private fun publish(a: Active, newAccent: Int) {
