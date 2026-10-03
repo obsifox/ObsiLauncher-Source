@@ -212,7 +212,7 @@ private fun BackgroundRows() {
     val app = context.app
     val obsi = LocalObsi.current
     val backgroundMode by app.settings.backgroundMode.collectAsState()
-    val videoBg by app.wallpaper.videoBg.collectAsState()
+    val videoMuted by app.settings.videoMuted.collectAsState()
 
     SettingRow(stringResourceCompat(R.string.settings_bg_mode)) {
         Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
@@ -239,22 +239,30 @@ private fun BackgroundRows() {
         }
     }
 
-    when (val vb = videoBg) {
-        is studio.obsifox.obsilauncher.obsi.VideoBg.Downloading -> SettingRow(
-            stringResourceCompat(R.string.settings_bg_video_downloading),
-            hint = "${vb.done / 1024 / 1024} / ${if (vb.total > 0) vb.total / 1024 / 1024 else "?"} MB",
-        ) {}
-        is studio.obsifox.obsilauncher.obsi.VideoBg.Failed -> SettingRow(
-            stringResourceCompat(R.string.settings_bg_video_failed, vb.message),
-        ) {
-            ObsiTextButton(stringResourceCompat(R.string.dl_retry), onClick = { app.wallpaper.ensureVideo() })
-        }
-        studio.obsifox.obsilauncher.obsi.VideoBg.Ready -> SettingRow(
-            stringResourceCompat(R.string.settings_bg_video_status),
-            hint = stringResourceCompat(R.string.settings_bg_video_ready),
-        ) {}
-        else -> SettingRow(stringResourceCompat(R.string.settings_bg_video_status), hint = stringResourceCompat(R.string.settings_bg_video_missing)) {
-            ObsiTextButton(stringResourceCompat(R.string.settings_bg_video_download), onClick = { app.wallpaper.ensureVideo() })
+    // v1.10.0: the trailer is bundled in the APK — no download state anymore
+    SettingRow(
+        stringResourceCompat(R.string.settings_bg_video_status),
+        hint = stringResourceCompat(R.string.settings_bg_video_bundled),
+    ) {}
+    SettingRow(stringResourceCompat(R.string.settings_video_sound)) {
+        Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+            listOf(
+                false to stringResourceCompat(R.string.settings_video_sound_on),
+                true to stringResourceCompat(R.string.settings_video_sound_off),
+            ).forEach { (muted, label) ->
+                val selected = videoMuted == muted
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (selected) Color.White else obsi.textDim,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (selected) obsi.accent else Color(0x2AFFFFFF))
+                        .clickable { app.settings.videoMutedValue = muted }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
         }
     }
 }

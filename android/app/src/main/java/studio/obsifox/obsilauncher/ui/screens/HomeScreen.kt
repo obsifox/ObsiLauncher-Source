@@ -33,7 +33,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.unit.dp
@@ -75,6 +79,8 @@ fun HomeScreen(
     val installing by app.installer.state.collectAsState()
     val loaderInstalling by app.loaders.state.collectAsState()
     val selectedVersion by app.settings.selectedVersion.collectAsState()
+    val videoActive by app.wallpaper.active.collectAsState()
+    val videoMuted by app.settings.videoMuted.collectAsState()
 
     val active = instances.firstOrNull { it.id == activeId }
     val account = accounts.firstOrNull { it.id == activeAccountId }
@@ -100,6 +106,31 @@ fun HomeScreen(
         downloadProgress == null
 
     Box(Modifier.fillMaxSize()) {
+        // v1.10.0 — sound toggle for the bundled background video; it sits
+        // just under the floating top bar, on the end side, out of the way.
+        // Rendered before the empty-state branch so it is always available.
+        if (videoActive.isVideo) {
+            val muteDesc = stringResourceCompat(if (videoMuted) R.string.bg_unmute else R.string.bg_mute)
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 76.dp, end = 16.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x99140F0C))
+                    .border(1.dp, Color(0x24FFFFFF), CircleShape)
+                    .clickable { app.settings.videoMutedValue = !videoMuted }
+                    .semantics { contentDescription = muteDesc },
+                contentAlignment = Alignment.Center,
+            ) {
+                SpeakerIcon(
+                    muted = videoMuted,
+                    color = Color(0xFFF4EFEA),
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+
         // empty state ----------------------------------------------------------
         if (instances.isEmpty()) {
             Column(
@@ -482,6 +513,52 @@ private fun GamepadIcon(modifier: Modifier = Modifier, color: Color) {
         // buttons (right)
         drawCircle(color, radius = stroke * 0.75f, center = Offset(w * 0.68f, cy - arm * 0.5f))
         drawCircle(color, radius = stroke * 0.75f, center = Offset(w * 0.76f, cy + arm * 0.5f))
+    }
+}
+
+/** speaker with sound waves — crossed out when the video is muted. */
+@Composable
+private fun SpeakerIcon(muted: Boolean, modifier: Modifier = Modifier, color: Color) {
+    Canvas(modifier) {
+        val stroke = 1.7.dp.toPx()
+        val w = size.width
+        val h = size.height
+        // speaker body: box + cone
+        val body = Path().apply {
+            moveTo(w * 0.18f, h * 0.40f)
+            lineTo(w * 0.40f, h * 0.40f)
+            lineTo(w * 0.58f, h * 0.24f)
+            lineTo(w * 0.58f, h * 0.76f)
+            lineTo(w * 0.40f, h * 0.60f)
+            lineTo(w * 0.18f, h * 0.60f)
+            close()
+        }
+        drawPath(body, color, style = Stroke(stroke, join = StrokeJoin.Round))
+        if (muted) {
+            // a clean X where the waves would be
+            drawLine(color, Offset(w * 0.68f, h * 0.36f), Offset(w * 0.86f, h * 0.64f), stroke)
+            drawLine(color, Offset(w * 0.86f, h * 0.36f), Offset(w * 0.68f, h * 0.64f), stroke)
+        } else {
+            // two open sound waves
+            drawArc(
+                color,
+                startAngle = -52f,
+                sweepAngle = 104f,
+                useCenter = false,
+                topLeft = Offset(w * 0.56f, h * 0.30f),
+                size = Size(w * 0.20f, h * 0.40f),
+                style = Stroke(stroke),
+            )
+            drawArc(
+                color,
+                startAngle = -52f,
+                sweepAngle = 104f,
+                useCenter = false,
+                topLeft = Offset(w * 0.64f, h * 0.18f),
+                size = Size(w * 0.34f, h * 0.64f),
+                style = Stroke(stroke),
+            )
+        }
     }
 }
 

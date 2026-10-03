@@ -15,7 +15,7 @@
     <string name="home_no_account">حسابی نیست — در بخش حساب‌ها یک پروفایل بسازید</string>
     <string name="home_version_ready">‏%1$s آماده‌ی بازی است</string>
     <string name="home_missing_runtime">پک ران‌تایم نصب نیست — از تنظیمات ← ران‌تایم نصبش کنید</string>
-    <string name="home_wallpaper_note">دو نوع بک‌گراند: ویدیوی تریلر رسمی برای آخرین نسخه، یا والپیپر رسمی هر نسخه از minecraft.net — رنگ‌بندی لانچر با artwork هماهنگ می‌شود</string>
+    <string name="home_wallpaper_note">دو نوع بک‌گراند: ویدیوی تریلر همراه برنامه برای آخرین نسخه (پخش می‌شود، بعد والپیپر ۴۵ ثانیه روی صفحه می‌ماند و بعد دوباره ویدیو — لوپ بی‌نهایت)، یا والپیپر رسمی هر نسخه از minecraft.net — رنگ‌بندی لانچر با artwork هماهنگ می‌شود</string>
     <string name="home_launching">در حال اجرای %1$s…</string>
     <string name="home_instances">اینستنس‌ها</string>
     <string name="home_no_instances">هنوز اینستنسی نیست — برای ساخت، یک نسخه نصب کنید</string>
@@ -185,7 +185,7 @@
     <string name="wizard_bg_title">بک‌گراند خود را انتخاب کنید</string>
     <string name="wizard_bg_hint">دو نوع بک‌گراند ساخته شده — هر زمان بخواهید از تنظیمات ← بک‌گراند عوضش کنید.</string>
     <string name="wizard_bg_video">ویدیوی زنده</string>
-    <string name="wizard_bg_video_desc">تریلر رسمی به‌صورت بی‌صدا پشت لانچر پخش می‌شود. فقط آخرین نسخه‌ی ماینکرافت ویدیو دارد — بقیه‌ی نسخه‌ها خودکار والپیپرشان را نشان می‌دهند.</string>
+    <string name="wizard_bg_video_desc">تریلر داخل خود برنامه است: یک بار پخش می‌شود، والپیپر ۴۵ ثانیه روی صفحه می‌ماند و بعد دوباره ویدیو پخش می‌شود — چرخه‌ی بی‌پایان. فقط آخرین نسخه‌ی ماینکرافت ویدیو دارد — بقیه‌ی نسخه‌ها خودکار والپیپرشان را نشان می‌دهند.</string>
     <string name="wizard_bg_wallpaper">والپیپرهای رسمی</string>
     <string name="wizard_bg_wallpaper_desc">هر نسخه والپیپر رسمی خودش را از minecraft.net می‌گیرد و رنگ‌بندی لانچر با آن هماهنگ می‌شود (Obsi Dynamic).</string>
     <string name="wizard_next">بعدی</string>
@@ -202,13 +202,14 @@
     <string name="settings_bg_mode">نوع بک‌گراند</string>
     <string name="settings_bg_wallpaper">والپیپر (بر اساس نسخه)</string>
     <string name="settings_bg_video">ویدیو (فقط آخرین نسخه)</string>
-    <string name="settings_bg_video_note">ویدیوی زنده فقط وقتی پخش می‌شود که آخرین نسخه‌ی ماینکرافت انتخاب باشد؛ بقیه‌ی نسخه‌ها خودکار والپیپر خودشان را نشان می‌دهند.</string>
+    <string name="settings_bg_video_note">ویدیوی همراه برنامه فقط وقتی پخش می‌شود که آخرین نسخه‌ی ماینکرافت (26.3 یا جدیدتر) انتخاب باشد؛ بقیه‌ی نسخه‌ها خودکار والپیپر خودشان را نشان می‌دهند.</string>
     <string name="settings_bg_video_status">ویدیوی تریلر</string>
-    <string name="settings_bg_video_ready">دانلود شده و آماده است</string>
-    <string name="settings_bg_video_missing">هنوز دانلود نشده</string>
-    <string name="settings_bg_video_download">دانلود ویدیو</string>
-    <string name="settings_bg_video_downloading">در حال دانلود…</string>
-    <string name="settings_bg_video_failed">دانلود ناموفق: %1$s</string>
+    <string name="settings_bg_video_bundled">داخل خود برنامه است — همیشه آماده، بدون دانلود</string>
+    <string name="settings_video_sound">صدای ویدیو</string>
+    <string name="settings_video_sound_on">پخش صدا</string>
+    <string name="settings_video_sound_off">بی‌صدا</string>
+    <string name="bg_mute">بی‌صدا کردن ویدیوی پس‌زمینه</string>
+    <string name="bg_unmute">پخش صدای ویدیوی پس‌زمینه</string>
     <string name="settings_bg_resync">همگام‌سازی دوباره‌ی بک‌گراند</string>
 
     <!-- 1.6.0 play dashboard -->

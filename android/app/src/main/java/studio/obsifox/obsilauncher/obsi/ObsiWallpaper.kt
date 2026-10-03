@@ -2,6 +2,7 @@ package studio.obsifox.obsilauncher.obsi
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -17,10 +18,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,20 +35,10 @@ import studio.obsifox.obsilauncher.core.BackgroundMode
 import studio.obsifox.obsilauncher.core.ObsiSettings
 import studio.obsifox.obsilauncher.core.Paths
 import studio.obsifox.obsilauncher.core.net.Http
-import studio.obsifox.obsilauncher.core.net.YouTube
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipFile
 import kotlin.math.abs
 import kotlin.math.ln
-
-/** Download progress of the live-video background. */
-sealed class VideoBg {
-    data object Idle : VideoBg()
-    data class Downloading(val done: Long, val total: Long) : VideoBg()
-    data class Failed(val message: String) : VideoBg()
-    data object Ready : VideoBg()
-}
 
 /**
  * ObsiLauncher background engine (written from scratch).
@@ -53,23 +48,22 @@ sealed class VideoBg {
  *    *Wilderness Bound* pack, older versions use the *Minecraft PC bundle*
  *    (both fetched from minecraft.net). The accent colour extracted from the
  *    active artwork drives the "Obsi Dynamic" theme through [accent].
- *  - VIDEO: the pinned official trailer (YouTube 1HCrV7mFWr8, fetched with a
- *    pytube-style resolver) plays as a muted, looping live background —
- *    only when the selected version IS the latest Minecraft release; every
- *    other version automatically falls back to wallpaper artwork.
+ *  - VIDEO: the trailer is BUNDLED in the APK (res/raw/video_wallpaper.mp4,
+ *    H.264 — plays everywhere). It runs once, then the version wallpaper
+ *    rests on screen for 45 seconds, then the video plays again — an endless
+ *    cycle. Only the latest Minecraft release (26.3 or newer at minimum)
+ *    gets the video; every other version falls back to wallpaper artwork.
  *
  * A user-picked custom background always wins over both.
  */
-class ObsiWallpaper(private val context: Context, private val settings: ObsiSettings) {
+class ObsiWallpaper(private val context: Context, val settings: ObsiSettings) {
 
     data class Active(val isVideo: Boolean, val imagePath: String?, val resId: Int? = null)
 
     val active = MutableStateFlow(Active(isVideo = false, imagePath = null))
     val accent = MutableStateFlow(0xFFFF8A3D.toInt())
-    val videoBg = MutableStateFlow<VideoBg>(VideoBg.Idle)
 
     private val latestRelease = MutableStateFlow("")
-    private val videoDownloading = AtomicBoolean(false)
 
     /** Call whenever the selected version changes (and once at startup). */
     fun sync(versionId: String?) {
@@ -80,7 +74,9 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
 
     private suspend fun apply(context: Context, settings: ObsiSettings, versionId: String?) =
         withContext(Dispatchers.IO) {
-            val latest = fetchLatestRelease()
+            // offline fallback keeps the video gate alive when Mojang's
+            // manifest is unreachable — 26.3 is the release the user pinned
+            val latest = fetchLatestRelease().ifBlank { FALLBACK_LATEST }
 
             val custom = settings.customWallpaperValue
             if (custom.isNotBlank() && File(custom).isFile) {
@@ -88,18 +84,24 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
                 return@withContext
             }
 
-            // Video background: only for the latest release, only when the user
-            // picked the video mode in the wizard / settings.
+            // Video background (v1.10.0): the trailer is bundled — nothing to
+            // download anymore. It plays only for the latest release when the
+            // user picked the video mode; the wallpaper art is resolved too so
+            // the 45 s rest phase has something sharp to show.
             if (settings.backgroundModeValue == BackgroundMode.VIDEO &&
-                versionId != null && latest.isNotEmpty() && versionId == latest
+                versionId != null && versionId == latest
             ) {
-                val trailer = Paths.trailerFile(context)
-                if (trailer.isFile && trailer.length() > 0) {
-                    videoBg.value = VideoBg.Ready
-                    publish(Active(true, null), accent.value)
-                    return@withContext
-                }
-                ensureVideo() // download in the background; wallpaper stays meanwhile
+                val artwork = ensureArtwork(packForVersion(versionId, latest), versionId)
+                val acc = artwork?.let(::extractAccent) ?: accent.value
+                publish(
+                    Active(
+                        isVideo = true,
+                        imagePath = artwork?.absolutePath,
+                        resId = if (artwork == null) bundledArtFor(versionId) else null,
+                    ),
+                    acc,
+                )
+                return@withContext
             }
 
             val packDir = packForVersion(versionId, latest)
@@ -131,33 +133,6 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
 
     /** Latest known release without touching the network again. */
     fun cachedLatestRelease(): String = latestRelease.value
-
-    /**
-     * Fetches the trailer with the pytube-style resolver and stores it as
-     * `obsi/trailer.mp4`. A single download runs at a time; on success the
-     * background re-syncs so the video starts immediately.
-     */
-    fun ensureVideo() {
-        if (!videoDownloading.compareAndSet(false, true)) return
-        videoBg.value = VideoBg.Idle
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val dest = Paths.trailerFile(context)
-                dest.parentFile?.mkdirs()
-                val result = YouTube.download(YouTube.TRAILER_VIDEO_ID, dest) { done, total ->
-                    videoBg.value = VideoBg.Downloading(done, total)
-                }
-                if (dest.length() <= 0) throw java.io.IOException("empty download")
-                videoBg.value = VideoBg.Ready
-                videoDownloading.set(false)
-                sync(settings.selectedVersionValue.ifBlank { null })
-            } catch (e: Exception) {
-                videoDownloading.set(false)
-                Paths.trailerFile(context).delete()
-                videoBg.value = VideoBg.Failed(e.message ?: "download failed")
-            }
-        }
-    }
 
     private fun extractAccent(image: File): Int = runCatching {
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -272,6 +247,9 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
         const val LEGACY_URL =
             "https://www.minecraft.net/content/dam/minecraftnet/games/minecraft/software/wallpapers_minecraft_pc_bundle.zip"
         const val LATEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+
+        /** Offline fallback for "the latest release" — the video gate never dies. */
+        const val FALLBACK_LATEST = "26.3"
     }
 }
 
@@ -344,19 +322,22 @@ fun releaseNameFor(parent: String): String = when {
 }
 
 /**
- * The full-screen backdrop: the looping trailer when [ObsiWallpaper.Active.isVideo]
- * is set, otherwise the version wallpaper with blur + scrims.
+ * The full-screen backdrop: the bundled trailer cycling with the version
+ * wallpaper when [ObsiWallpaper.Active.isVideo] is set, otherwise the static
+ * wallpaper with scrims.
  */
 @Composable
 fun ObsiWallpaperLayer(wallpaper: ObsiWallpaper, blurPx: Int, modifier: Modifier = Modifier) {
     val active by wallpaper.active.collectAsState()
-    val context = LocalContext.current
+    val muted by wallpaper.settings.videoMuted.collectAsState()
 
     Box(modifier.fillMaxSize().background(Color(0xFF0B0908))) {
         val path = active.imagePath
         when {
-            active.isVideo -> TrailerVideoLayer(
-                video = Paths.trailerFile(context),
+            active.isVideo -> VideoCycleLayer(
+                restImagePath = path,
+                restResId = active.resId,
+                muted = muted,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -404,11 +385,95 @@ fun ObsiWallpaperLayer(wallpaper: ObsiWallpaper, blurPx: Int, modifier: Modifier
 
 private fun Int.dp() = androidx.compose.ui.unit.Dp(this.toFloat())
 
+/** Phases of the v1.10.0 background cycle. */
+private enum class VideoPhase { PLAYING, RESTING }
+
+/**
+ * The background cycle, exactly as briefed:
+ * the bundled video plays ONCE -> the version wallpaper holds the screen
+ * for 45 seconds -> the video starts again. Endless loop, zero downloads.
+ */
 @Composable
-private fun TrailerVideoLayer(video: File, modifier: Modifier = Modifier) {
-    if (!video.isFile) return
+private fun VideoCycleLayer(
+    restImagePath: String?,
+    restResId: Int?,
+    muted: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    var phase by remember { mutableStateOf(VideoPhase.PLAYING) }
+    var cycle by remember { mutableStateOf(0) }
+    when (phase) {
+        VideoPhase.PLAYING -> key(cycle) {
+            BundledVideoSurface(
+                videoRes = R.raw.video_wallpaper,
+                muted = muted,
+                onEnded = { phase = VideoPhase.RESTING },
+                modifier = modifier,
+            )
+        }
+        VideoPhase.RESTING -> {
+            RestArtwork(restImagePath, restResId, modifier)
+            LaunchedEffect(cycle) {
+                delay(45_000L)
+                cycle += 1
+                phase = VideoPhase.PLAYING
+            }
+        }
+    }
+}
+
+/** The static version artwork shown while the video rests. */
+@Composable
+private fun RestArtwork(imagePath: String?, resId: Int?, modifier: Modifier = Modifier) {
+    when {
+        imagePath != null -> {
+            val bitmap = remember(imagePath) {
+                runCatching { BitmapFactory.decodeFile(imagePath)?.asImageBitmap() }.getOrNull()
+            }
+            if (bitmap != null) {
+                Image(bitmap, null, contentScale = ContentScale.Crop, modifier = modifier)
+            } else if (resId != null) {
+                Image(painterResource(resId), null, contentScale = ContentScale.Crop, modifier = modifier)
+            }
+        }
+        resId != null -> {
+            Image(painterResource(resId), null, contentScale = ContentScale.Crop, modifier = modifier)
+        }
+    }
+}
+
+/**
+ * One pass of the bundled trailer on a SurfaceView. Not self-looping —
+ * completion hands over to the 45 s wallpaper rest. Sound follows the
+ * user's mute choice and playback pauses with the app lifecycle.
+ */
+@Composable
+private fun BundledVideoSurface(
+    videoRes: Int,
+    muted: Boolean,
+    onEnded: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
-    DisposableEffect(video.path) {
+
+    // the mute toggle applies to the running player immediately
+    LaunchedEffect(muted, player) {
+        player?.setVolume(if (muted) 0f else 1f, if (muted) 0f else 1f)
+    }
+    // no sound (or decoding) while the launcher itself is hidden
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> runCatching { player?.takeIf { it.isPlaying }?.pause() }
+                Lifecycle.Event.ON_RESUME -> runCatching { player?.start() }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+    DisposableEffect(videoRes) {
         onDispose {
             runCatching { player?.release() }
             player = null
@@ -421,17 +486,31 @@ private fun TrailerVideoLayer(video: File, modifier: Modifier = Modifier) {
                     override fun surfaceCreated(holder: SurfaceHolder) {
                         runCatching {
                             val mp = MediaPlayer()
-                            mp.setDataSource(video.absolutePath)
+                            mp.setAudioAttributes(
+                                AudioAttributes.Builder()
+                                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                                    .build(),
+                            )
+                            val afd = ctx.resources.openRawResourceFd(videoRes)
+                            mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                            afd.close()
                             mp.setSurface(holder.surface)
-                            mp.isLooping = true
-                            mp.setVolume(0f, 0f)
-                            mp.prepare()
-                            mp.start()
+                            mp.isLooping = false // one pass -> 45 s wallpaper rest -> again
+                            mp.setOnCompletionListener { onEnded() }
+                            val v = if (muted) 0f else 1f
+                            mp.setVolume(v, v)
+                            mp.setOnPreparedListener { it.start() }
+                            mp.prepareAsync()
                             player = mp
+                        }.onFailure {
+                            // decoder hiccup: rest on the wallpaper, retry next cycle
+                            onEnded()
                         }
                     }
 
                     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
+
                     override fun surfaceDestroyed(holder: SurfaceHolder) {
                         runCatching { player?.release() }
                         player = null

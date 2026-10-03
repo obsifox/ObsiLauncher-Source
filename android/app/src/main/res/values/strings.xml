@@ -16,7 +16,7 @@
     <string name="home_no_account">No account — add an offline profile in Accounts</string>
     <string name="home_version_ready">%1$s is ready to play</string>
     <string name="home_missing_runtime">Runtime pack missing — install it from Settings → Runtime</string>
-    <string name="home_wallpaper_note">Two background types: the official trailer video for the latest release, or per-version wallpapers from minecraft.net — the launcher theme recolors itself to match the artwork</string>
+    <string name="home_wallpaper_note">Two background types: the bundled trailer video for the latest release (plays, then the wallpaper rests for 45 s, then the video loops back), or per-version wallpapers from minecraft.net — the launcher theme recolors itself to match the artwork</string>
     <string name="home_launching">Starting %1$s…</string>
     <string name="home_instances">Instances</string>
     <string name="home_no_instances">No instances yet — install a version to create one</string>
@@ -186,7 +186,7 @@
     <string name="wizard_bg_title">Pick your background</string>
     <string name="wizard_bg_hint">Two background types are built in — you can switch any time in Settings → Background.</string>
     <string name="wizard_bg_video">Live video</string>
-    <string name="wizard_bg_video_desc">The official trailer plays muted behind the launcher. Only the latest Minecraft release gets the video — other versions automatically show their wallpaper.</string>
+    <string name="wizard_bg_video_desc">The trailer is bundled in the app: it plays once, your wallpaper holds the screen for 45 seconds, then the video plays again — an endless cycle. Only the latest Minecraft release gets the video; other versions automatically show their wallpaper.</string>
     <string name="wizard_bg_wallpaper">Official wallpapers</string>
     <string name="wizard_bg_wallpaper_desc">Every version gets its official minecraft.net artwork and the launcher recolors itself to match it (Obsi Dynamic).</string>
     <string name="wizard_next">Next</string>
@@ -203,13 +203,14 @@
     <string name="settings_bg_mode">Background type</string>
     <string name="settings_bg_wallpaper">Wallpaper (per version)</string>
     <string name="settings_bg_video">Video (latest version only)</string>
-    <string name="settings_bg_video_note">The live video plays only while the latest Minecraft release is selected; every other version automatically falls back to its wallpaper.</string>
+    <string name="settings_bg_video_note">The bundled video plays only while the latest Minecraft release is selected (26.3 or newer); every other version automatically falls back to its wallpaper.</string>
     <string name="settings_bg_video_status">Trailer video</string>
-    <string name="settings_bg_video_ready">Downloaded and ready</string>
-    <string name="settings_bg_video_missing">Not downloaded yet</string>
-    <string name="settings_bg_video_download">Download video</string>
-    <string name="settings_bg_video_downloading">Downloading…</string>
-    <string name="settings_bg_video_failed">Download failed: %1$s</string>
+    <string name="settings_bg_video_bundled">Bundled in the app — always ready, no download</string>
+    <string name="settings_video_sound">Video sound</string>
+    <string name="settings_video_sound_on">On</string>
+    <string name="settings_video_sound_off">Muted</string>
+    <string name="bg_mute">Mute background video</string>
+    <string name="bg_unmute">Unmute background video</string>
     <string name="settings_bg_resync">Re-sync background</string>
 
     <!-- 1.6.0 play dashboard -->

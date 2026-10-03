@@ -15,7 +15,6 @@ object Paths {
     fun runtimeRoot(ctx: Context): File = File(ctx.filesDir, "runtime")
     fun obsiRoot(ctx: Context): File = File(ctx.filesDir, "obsi")
     fun wallpaperRoot(ctx: Context): File = File(obsiRoot(ctx), "wallpapers")
-    fun trailerFile(ctx: Context): File = File(obsiRoot(ctx), "trailer.mp4")
     fun customWallpaper(ctx: Context): File = File(obsiRoot(ctx), "custom-bg")
 }
 
@@ -25,8 +24,10 @@ enum class ThemeMode { MINECRAFT, DYNAMIC, OBSIDIAN, VANILLA, WHITE }
  * The launcher ships two background engines:
  *  - WALLPAPER: per-version official artwork from minecraft.net
  *    (>= 1.12.2 -> Wilderness Bound pack, older -> Minecraft PC bundle)
- *  - VIDEO:    the official trailer as a live background — only for the
- *    latest Minecraft release; other versions fall back to wallpapers
+ *  - VIDEO:    the trailer BUNDLED in the APK as a live background — only for
+ *    the latest Minecraft release; after every pass the wallpaper rests on
+ *    screen for 45 s and the video starts again (endless cycle). Other
+ *    versions fall back to wallpapers.
  */
 enum class BackgroundMode { WALLPAPER, VIDEO }
 
@@ -77,6 +78,10 @@ class ObsiSettings(context: Context) {
     }
     val setupDone = state("setup_done", false) { p, k -> p.getBoolean(k, false) }
 
+    // v1.10.0: the bundled background video has sound by default; the user
+    // can mute it with the on-screen speaker button (or here in settings)
+    val videoMuted = state("video_muted", false) { p, k -> p.getBoolean(k, false) }
+
     // ---- typed accessors -----------------------------------------------------
 
     var selectedVersionValue: String
@@ -118,6 +123,10 @@ class ObsiSettings(context: Context) {
     var setupDoneValue: Boolean
         get() = setupDone.value
         set(v) { prefs.edit().putBoolean("setup_done", v).apply() }
+
+    var videoMutedValue: Boolean
+        get() = videoMuted.value
+        set(v) { prefs.edit().putBoolean("video_muted", v).apply() }
 
     private companion object {
         fun str(p: SharedPreferences, k: String): String = p.getString(k, "") ?: ""
