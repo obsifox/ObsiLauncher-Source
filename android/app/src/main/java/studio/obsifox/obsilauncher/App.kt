@@ -40,7 +40,18 @@ class App : Application() {
     lateinit var microsoft: MicrosoftAuth
         private set
 
-    val gameManager: GameManager by lazy { GameManager(settings) }
+    val gameManager: GameManager by lazy {
+        GameManager(settings).also { gm ->
+            gm.sessionEvents = object : GameManager.SessionEvents {
+                override fun onSessionStart(instanceId: String) {
+                    instances.markLaunched(instanceId)
+                }
+                override fun onSessionEnd(instanceId: String, seconds: Long) {
+                    instances.recordSession(instanceId, seconds)
+                }
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()

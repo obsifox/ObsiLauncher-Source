@@ -26,6 +26,8 @@ data class Instance(
     val createdAt: Long = System.currentTimeMillis(),
     val memoryMb: Int = 0,       // 0 = use global setting
     val javaArgs: String = "",   // "" = use global setting
+    val playSeconds: Long = 0,   // total time played
+    val lastPlayed: Long = 0,    // epoch ms of the last launch
 ) {
     val loaderType: LoaderType get() = LoaderType.byId(loader)
     val isCustom: Boolean get() = name != versionId
@@ -97,6 +99,25 @@ class InstancesStore(private val context: Context, private val settings: ObsiSet
         persist()
     }
 
+    /** called when a game session starts — updates "last played" immediately. */
+    fun markLaunched(id: String) {
+        instances.value = instances.value.map {
+            if (it.id == id) it.copy(lastPlayed = System.currentTimeMillis()) else it
+        }
+        persist()
+    }
+
+    /** called when a game session ends — accumulates playtime. */
+    fun recordSession(id: String, seconds: Long) {
+        if (seconds <= 0) return
+        instances.value = instances.value.map {
+            if (it.id == id) {
+                it.copy(playSeconds = it.playSeconds + seconds, lastPlayed = System.currentTimeMillis())
+            } else it
+        }
+        persist()
+    }
+
     fun setActive(id: String) {
         activeId.value = id
         persist()
@@ -150,6 +171,8 @@ class InstancesStore(private val context: Context, private val settings: ObsiSet
                     createdAt = o.optLong("created_at"),
                     memoryMb = o.optInt("memory_mb", 0),
                     javaArgs = o.optString("java_args"),
+                    playSeconds = o.optLong("play_seconds", 0),
+                    lastPlayed = o.optLong("last_played", 0),
                 )
             }
             instances.value = list
@@ -176,7 +199,9 @@ class InstancesStore(private val context: Context, private val settings: ObsiSet
                                 .put("loader_version", it.loaderVersion ?: "")
                                 .put("created_at", it.createdAt)
                                 .put("memory_mb", it.memoryMb)
-                                .put("java_args", it.javaArgs),
+                                .put("java_args", it.javaArgs)
+                                .put("play_seconds", it.playSeconds)
+                                .put("last_played", it.lastPlayed),
                         )
                     }
                 },

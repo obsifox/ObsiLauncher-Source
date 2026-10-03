@@ -2,7 +2,8 @@
 <resources>
     <string name="app_name">ابسی لانچر</string>
     <string name="nav_home">خانه</string>
-    <string name="nav_versions">نسخه‌ها</string>
+    <string name="nav_play">بازی</string>
+    <string name="nav_versions">نسخه</string>
     <string name="nav_browse">مادها</string>
     <string name="nav_accounts">حساب‌ها</string>
     <string name="nav_console">کنسول</string>
@@ -209,4 +210,14 @@
     <string name="settings_bg_video_downloading">در حال دانلود…</string>
     <string name="settings_bg_video_failed">دانلود ناموفق: %1$s</string>
     <string name="settings_bg_resync">همگام‌سازی دوباره‌ی بک‌گراند</string>
+
+    <!-- 1.6.0 play dashboard -->
+    <string name="home_play_big">بازی کن</string>
+    <string name="time_min">‏%1$d دقیقه</string>
+    <string name="time_hour">‏%1$d ساعت</string>
+    <string name="time_day">‏%1$d روز</string>
+    <string name="last_now">همین حالا</string>
+    <string name="last_min_ago">‏%1$d دقیقه پیش</string>
+    <string name="last_hour_ago">‏%1$d ساعت پیش</string>
+    <string name="last_day_ago">‏%1$d روز پیش</string>
 </resources>

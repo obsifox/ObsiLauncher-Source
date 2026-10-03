@@ -20,7 +20,15 @@ enum class GameState { NOT_RUNNING, PREPARING, RUNNING, EXITED }
 /** Owns the single running game process and its console log. */
 class GameManager(private val settings: ObsiSettings) {
 
-    data class Running(val versionId: String, val pid: Int)
+    /** playtime hooks so the home screen can show play-time / last-played. */
+    interface SessionEvents {
+        fun onSessionStart(instanceId: String)
+        fun onSessionEnd(instanceId: String, seconds: Long)
+    }
+
+    var sessionEvents: SessionEvents? = null
+
+    data class Running(val instanceId: String, val versionId: String, val pid: Int)
 
     val state = MutableStateFlow(GameState.NOT_RUNNING)
     val running = MutableStateFlow<Running?>(null)
@@ -35,6 +43,7 @@ class GameManager(private val settings: ObsiSettings) {
         state.value = GameState.PREPARING
         exitCode.value = null
         log.value = ""
+        var startedAt = 0L
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
                 // local-only custom skin/cape goes into the game dir before start
@@ -58,14 +67,20 @@ class GameManager(private val settings: ObsiSettings) {
                     appendLog("!! ObsiLauncher: fork/exec failed — check the runtime pack (${pack.launcherSo.path})\n")
                     return@launch
                 }
-                running.value = Running(instance.versionId, pid)
+                running.value = Running(instance.id, instance.versionId, pid)
                 state.value = GameState.RUNNING
+                startedAt = System.currentTimeMillis()
+                sessionEvents?.onSessionStart(instance.id)
                 startLogReader()
                 val code = ObsiBridge.waitPid(pid)
+                sessionEvents?.onSessionEnd(instance.id, (System.currentTimeMillis() - startedAt) / 1000)
                 exitCode.value = code
                 state.value = GameState.EXITED
                 running.value = null
             } catch (e: Exception) {
+                if (startedAt > 0) {
+                    sessionEvents?.onSessionEnd(instance.id, (System.currentTimeMillis() - startedAt) / 1000)
+                }
                 appendLog("!! ${e.message}\n")
                 state.value = GameState.EXITED
                 exitCode.value = -1

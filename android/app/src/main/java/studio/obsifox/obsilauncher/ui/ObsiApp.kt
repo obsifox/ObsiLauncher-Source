@@ -1,13 +1,19 @@
 package studio.obsifox.obsilauncher.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,10 +22,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import studio.obsifox.obsilauncher.R
 import studio.obsifox.obsilauncher.app
@@ -32,17 +47,22 @@ import studio.obsifox.obsilauncher.ui.screens.InstanceDetailScreen
 import studio.obsifox.obsilauncher.ui.screens.SettingsScreen
 import studio.obsifox.obsilauncher.ui.screens.SetupWizard
 import studio.obsifox.obsilauncher.ui.screens.VersionsScreen
-import studio.obsifox.obsilauncher.ui.screens.stringResourceCompat
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
 enum class Screen(val titleRes: Int) {
-    HOME(R.string.nav_home),
+    HOME(R.string.nav_play),
     VERSIONS(R.string.nav_versions),
     BROWSE(R.string.nav_browse),
     ACCOUNTS(R.string.nav_accounts),
     SETTINGS(R.string.nav_settings),
     ABOUT(R.string.nav_about),
 }
+
+/** Tabs shown in the top bar — accounts live behind the avatar, about behind the star. */
+private val TopTabs = listOf(Screen.HOME, Screen.VERSIONS, Screen.BROWSE, Screen.SETTINGS)
+
+/** Height of the floating top bar (content below it starts here when not HOME). */
+val TopBarSpace = 68.dp
 
 /** Secondary destinations on top of the tab bar. */
 sealed class Overlay {
@@ -61,8 +81,6 @@ fun ObsiApp() {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val selected by app.settings.selectedVersion.collectAsState()
-    val gameState by app.gameManager.state.collectAsState()
-    val wallpaperActive by app.wallpaper.active.collectAsState()
 
     // wallpaper follows the active instance's version — always, wizard included
     LaunchedEffect(selected) {
@@ -76,40 +94,14 @@ fun ObsiApp() {
         return
     }
 
-    Scaffold(
-        containerColor = Color.Transparent,
-        bottomBar = {
-            if (overlay == Overlay.None) {
-                NavigationBar(containerColor = Color.Transparent) {
-                    Screen.entries.forEach { entry ->
-                        NavigationBarItem(
-                            selected = screen == entry,
-                            onClick = { screen = entry },
-                            icon = {
-                                Text(
-                                    text = screenIcon(entry),
-                                    style = MaterialTheme.typography.titleMedium,
-                                )
-                            },
-                            label = { Text(stringResource(entry.titleRes), style = MaterialTheme.typography.labelMedium) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = obsi.accent,
-                                selectedTextColor = obsi.accent,
-                                indicatorColor = obsi.accentDim,
-                                unselectedIconColor = obsi.textDim,
-                                unselectedTextColor = obsi.textDim,
-                            ),
-                        )
-                    }
-                }
-            }
-        },
-    ) { padding ->
-        Box(
+    Box(Modifier.fillMaxSize()) {
+        // screen content -------------------------------------------------------
+        val contentModifier = if (overlay == Overlay.None && screen != Screen.HOME) {
+            Modifier.padding(top = TopBarSpace)
+        } else {
             Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
+        }
+        Box(contentModifier.fillMaxSize()) {
             when (overlay) {
                 Overlay.Console -> ConsoleScreen(onClose = { overlay = Overlay.None })
                 Overlay.InstanceDetail -> InstanceDetailScreen(onClose = { overlay = Overlay.None })
@@ -148,7 +140,6 @@ fun ObsiApp() {
                         onPickAccount = { screen = Screen.ACCOUNTS },
                         onOpenConsole = { overlay = Overlay.Console },
                         onOpenInstance = { overlay = Overlay.InstanceDetail },
-                        onOpenBrowse = { screen = Screen.BROWSE },
                     )
                     Screen.VERSIONS -> VersionsScreen()
                     Screen.BROWSE -> BrowseScreen()
@@ -158,14 +149,116 @@ fun ObsiApp() {
                 }
             }
         }
+
+        // floating top bar -----------------------------------------------------
+        if (overlay == Overlay.None) {
+            val accounts by app.accounts.accounts.collectAsState()
+            val activeAccountId by app.accounts.activeId.collectAsState()
+            val activeAccount = accounts.firstOrNull { it.id == activeAccountId }
+            ObsiTopBar(
+                playerName = activeAccount?.name,
+                current = screen,
+                onSelect = { screen = it },
+                onAccounts = { screen = Screen.ACCOUNTS },
+                onAbout = { screen = Screen.ABOUT },
+            )
+        }
     }
 }
 
-private fun screenIcon(screen: Screen): String = when (screen) {
-    Screen.HOME -> "⌂"
-    Screen.VERSIONS -> "❖"
-    Screen.BROWSE -> "⬢"
-    Screen.ACCOUNTS -> "☻"
-    Screen.SETTINGS -> "⚙"
-    Screen.ABOUT -> "✦"
+@Composable
+private fun ObsiTopBar(
+    playerName: String?,
+    current: Screen,
+    onSelect: (Screen) -> Unit,
+    onAccounts: () -> Unit,
+    onAbout: () -> Unit,
+) {
+    val obsi = LocalObsi.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xB3140F0C), Color(0x66140F0C), Color.Transparent),
+                ),
+            ),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // avatar — square pixel-style, opens the accounts screen
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(obsi.accentDim.copy(alpha = 0.55f))
+                    .clickable(onClick = onAccounts),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = playerName?.take(1)?.uppercase() ?: "☻",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = obsi.accent,
+                )
+            }
+            Spacer(Modifier.width(9.dp))
+            Text(
+                text = playerName ?: stringResource(R.string.nav_accounts),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = obsi.text,
+                modifier = Modifier.clickable(onClick = onAccounts),
+            )
+            Spacer(Modifier.width(26.dp))
+            TopTabs.forEach { tab ->
+                TopTab(
+                    label = stringResource(tab.titleRes),
+                    selected = current == tab,
+                    onClick = { onSelect(tab) },
+                )
+                Spacer(Modifier.width(10.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "✦",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (current == Screen.ABOUT) obsi.accent else obsi.textDim,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onAbout)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TopTab(label: String, selected: Boolean, onClick: () -> Unit) {
+    val obsi = LocalObsi.current
+    Text(
+        text = label,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        color = if (selected) obsi.accent else obsi.textDim,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .drawBehind {
+                if (selected) {
+                    drawRoundRect(
+                        color = obsi.accent,
+                        topLeft = Offset(0f, size.height - 3.dp.toPx()),
+                        size = Size(size.width, 3.dp.toPx()),
+                        cornerRadius = CornerRadius(2.dp.toPx()),
+                    )
+                }
+            },
+    )
 }

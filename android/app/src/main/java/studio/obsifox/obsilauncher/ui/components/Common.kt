@@ -37,7 +37,7 @@ fun GlassCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(
                 Brush.verticalGradient(
                     listOf(
@@ -46,8 +46,8 @@ fun GlassCard(
                     )
                 )
             )
-            .border(1.dp, obsi.glassBorder, RoundedCornerShape(18.dp))
-            .padding(horizontal = 18.dp, vertical = 16.dp),
+            .border(1.dp, obsi.glassBorder, RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         content = content,
     )
 }
@@ -56,9 +56,9 @@ fun GlassCard(
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.titleSmall,
         color = LocalObsi.current.textDim,
-        modifier = modifier.padding(top = 20.dp, bottom = 10.dp),
+        modifier = modifier.padding(top = 14.dp, bottom = 7.dp),
     )
 }
 
@@ -74,17 +74,17 @@ fun ObsiButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (danger) obsi.danger else obsi.accent,
             contentColor = Color(0xFF17110B),
             disabledContainerColor = obsi.accentDim.copy(alpha = 0.25f),
             disabledContentColor = obsi.textDim,
         ),
-        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp),
         modifier = modifier,
     ) {
-        Text(text, fontWeight = FontWeight.SemiBold)
+        Text(text, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -99,14 +99,15 @@ fun ObsiGhostButton(
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = obsi.text,
             disabledContentColor = obsi.textDim,
         ),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         modifier = modifier,
     ) {
-        Text(text, fontWeight = FontWeight.SemiBold)
+        Text(text, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
     }
 }
 
