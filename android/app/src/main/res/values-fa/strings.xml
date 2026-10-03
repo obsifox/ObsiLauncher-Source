@@ -14,7 +14,7 @@
     <string name="home_no_account">حسابی نیست — در بخش حساب‌ها یک پروفایل بسازید</string>
     <string name="home_version_ready">‏%1$s آماده‌ی بازی است</string>
     <string name="home_missing_runtime">پک ران‌تایم نصب نیست — از تنظیمات ← ران‌تایم نصبش کنید</string>
-    <string name="home_wallpaper_note">پس‌زمینه‌ی نسخه‌ی انتخاب‌شده از minecraft.net دریافت می‌شود</string>
+    <string name="home_wallpaper_note">دو نوع بک‌گراند: ویدیوی تریلر رسمی برای آخرین نسخه، یا والپیپر رسمی هر نسخه از minecraft.net — رنگ‌بندی لانچر با artwork هماهنگ می‌شود</string>
     <string name="home_launching">در حال اجرای %1$s…</string>
     <string name="home_instances">اینستنس‌ها</string>
     <string name="home_no_instances">هنوز اینستنسی نیست — برای ساخت، یک نسخه نصب کنید</string>
@@ -176,4 +176,37 @@
     <string name="err_generic">مشکلی پیش آمد: %1$s</string>
     <string name="ok">تأیید</string>
     <string name="cancel">لغو</string>
+
+    <!-- 1.5.0 ویزارد استارتاپ -->
+    <string name="wizard_welcome_title">به ObsiLauncher خوش آمدید</string>
+    <string name="wizard_welcome_body">یک لانچر ماینکرافت رایگان و متن‌باز برای اندروید — بدون کلید دسترسی و بدون قابلیت قفل‌شده. چهار قدم کوتاه تا شروع بازی.</string>
+    <string name="wizard_start">شروع کنیم</string>
+    <string name="wizard_bg_title">بک‌گراند خود را انتخاب کنید</string>
+    <string name="wizard_bg_hint">دو نوع بک‌گراند ساخته شده — هر زمان بخواهید از تنظیمات ← بک‌گراند عوضش کنید.</string>
+    <string name="wizard_bg_video">ویدیوی زنده</string>
+    <string name="wizard_bg_video_desc">تریلر رسمی به‌صورت بی‌صدا پشت لانچر پخش می‌شود. فقط آخرین نسخه‌ی ماینکرافت ویدیو دارد — بقیه‌ی نسخه‌ها خودکار والپیپرشان را نشان می‌دهند.</string>
+    <string name="wizard_bg_wallpaper">والپیپرهای رسمی</string>
+    <string name="wizard_bg_wallpaper_desc">هر نسخه والپیپر رسمی خودش را از minecraft.net می‌گیرد و رنگ‌بندی لانچر با آن هماهنگ می‌شود (Obsi Dynamic).</string>
+    <string name="wizard_next">بعدی</string>
+    <string name="wizard_account_title">پروفایل بازیکن شما</string>
+    <string name="wizard_account_body">همین حالا یک پروفایل آفلاین رایگان بسازید — به اکانت مایکروسافت نیازی نیست. بعداً می‌توانید از بخش اکانت‌ها اکانت مایکروسافت اضافه کنید.</string>
+    <string name="wizard_account_existing">پروفایل موجود: %1$s</string>
+    <string name="wizard_account_error">نام باید ۳ تا ۱۶ حرف، عدد یا _ باشد</string>
+    <string name="wizard_done_title">همه چیز آماده است!</string>
+    <string name="wizard_done_body">از تب نسخه‌ها یک نسخه نصب کنید و دکمه‌ی Play را بزنید. خوش بگذرد!</string>
+    <string name="wizard_enter">ورود به ObsiLauncher</string>
+
+    <!-- 1.5.0 تنظیمات بک‌گراند -->
+    <string name="settings_background">بک‌گراند</string>
+    <string name="settings_bg_mode">نوع بک‌گراند</string>
+    <string name="settings_bg_wallpaper">والپیپر (بر اساس نسخه)</string>
+    <string name="settings_bg_video">ویدیو (فقط آخرین نسخه)</string>
+    <string name="settings_bg_video_note">ویدیوی زنده فقط وقتی پخش می‌شود که آخرین نسخه‌ی ماینکرافت انتخاب باشد؛ بقیه‌ی نسخه‌ها خودکار والپیپر خودشان را نشان می‌دهند.</string>
+    <string name="settings_bg_video_status">ویدیوی تریلر</string>
+    <string name="settings_bg_video_ready">دانلود شده و آماده است</string>
+    <string name="settings_bg_video_missing">هنوز دانلود نشده</string>
+    <string name="settings_bg_video_download">دانلود ویدیو</string>
+    <string name="settings_bg_video_downloading">در حال دانلود…</string>
+    <string name="settings_bg_video_failed">دانلود ناموفق: %1$s</string>
+    <string name="settings_bg_resync">همگام‌سازی دوباره‌ی بک‌گراند</string>
 </resources>

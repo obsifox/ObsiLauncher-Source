@@ -22,6 +22,15 @@ object Paths {
 enum class ThemeMode { DYNAMIC, OBSIDIAN, VANILLA, WHITE }
 
 /**
+ * The launcher ships two background engines:
+ *  - WALLPAPER: per-version official artwork from minecraft.net
+ *    (>= 1.12.2 -> Wilderness Bound pack, older -> Minecraft PC bundle)
+ *  - VIDEO:    the official trailer as a live background — only for the
+ *    latest Minecraft release; other versions fall back to wallpapers
+ */
+enum class BackgroundMode { WALLPAPER, VIDEO }
+
+/**
  * Tiny observable settings layer: SharedPreferences on disk,
  * [StateFlow] mirrors for Compose.
  */
@@ -59,6 +68,11 @@ class ObsiSettings(context: Context) {
     val javaArgs = state("java_args", "", ::str)
     val runtimePack = state("runtime_pack", "", ::str)
     val language = state("language", "system") { p, k -> p.getString(k, "system") ?: "system" }
+    val backgroundMode = state("background_mode", BackgroundMode.WALLPAPER) { p, k ->
+        runCatching { BackgroundMode.valueOf(p.getString(k, BackgroundMode.WALLPAPER.name) ?: "") }
+            .getOrDefault(BackgroundMode.WALLPAPER)
+    }
+    val setupDone = state("setup_done", false) { p, k -> p.getBoolean(k, false) }
 
     // ---- typed accessors -----------------------------------------------------
 
@@ -93,6 +107,14 @@ class ObsiSettings(context: Context) {
     var languageValue: String
         get() = language.value
         set(v) { prefs.edit().putString("language", v).apply() }
+
+    var backgroundModeValue: BackgroundMode
+        get() = backgroundMode.value
+        set(v) { prefs.edit().putString("background_mode", v.name).apply() }
+
+    var setupDoneValue: Boolean
+        get() = setupDone.value
+        set(v) { prefs.edit().putBoolean("setup_done", v).apply() }
 
     private companion object {
         fun str(p: SharedPreferences, k: String): String = p.getString(k, "") ?: ""

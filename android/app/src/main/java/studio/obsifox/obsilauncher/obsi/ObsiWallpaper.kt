@@ -18,31 +18,45 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import studio.obsifox.obsilauncher.core.BackgroundMode
 import studio.obsifox.obsilauncher.core.ObsiSettings
 import studio.obsifox.obsilauncher.core.Paths
 import studio.obsifox.obsilauncher.core.net.Http
+import studio.obsifox.obsilauncher.core.net.YouTube
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipFile
 import kotlin.math.abs
 import kotlin.math.ln
 
+/** Download progress of the live-video background. */
+sealed class VideoBg {
+    data object Idle : VideoBg()
+    data class Downloading(val done: Long, val total: Long) : VideoBg()
+    data class Failed(val message: String) : VideoBg()
+    data object Ready : VideoBg()
+}
+
 /**
- * Version-driven wallpaper engine (written from scratch for ObsiLauncher 1.3.0).
+ * ObsiLauncher background engine (written from scratch).
  *
- * Rules:
- *  - Minecraft >= 1.12.2 -> official *Wilderness Bound* pack (minecraft.net)
- *  - Minecraft <  1.12.2 -> official *Minecraft PC bundle* pack (minecraft.net)
- *  - the latest release  -> the Wilderness trailer as a live background when
- *    `<files>/obsi/trailer.mp4` is present
- *  - a user-picked custom background always wins
+ * Two background types, exactly as briefed:
+ *  - WALLPAPER: version-driven official artwork — Minecraft >= 1.12.2 uses the
+ *    *Wilderness Bound* pack, older versions use the *Minecraft PC bundle*
+ *    (both fetched from minecraft.net). The accent colour extracted from the
+ *    active artwork drives the "Obsi Dynamic" theme through [accent].
+ *  - VIDEO: the pinned official trailer (YouTube 1HCrV7mFWr8, fetched with a
+ *    pytube-style resolver) plays as a muted, looping live background —
+ *    only when the selected version IS the latest Minecraft release; every
+ *    other version automatically falls back to wallpaper artwork.
  *
- * The accent colour extracted from the active artwork drives the "Obsi Dynamic"
- * theme through [accent].
+ * A user-picked custom background always wins over both.
  */
 class ObsiWallpaper(private val context: Context, private val settings: ObsiSettings) {
 
@@ -50,45 +64,95 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
 
     val active = MutableStateFlow(Active(isVideo = false, imagePath = null))
     val accent = MutableStateFlow(0xFFFF8A3D.toInt())
+    val videoBg = MutableStateFlow<VideoBg>(VideoBg.Idle)
+
+    private val latestRelease = MutableStateFlow("")
+    private val videoDownloading = AtomicBoolean(false)
 
     /** Call whenever the selected version changes (and once at startup). */
     fun sync(versionId: String?) {
-        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.IO).launch {
             apply(context, settings, versionId)
         }
     }
 
-    private suspend fun apply(context: Context, settings: ObsiSettings, versionId: String?) = withContext(Dispatchers.IO) {
-        val custom = settings.customWallpaperValue
-        if (custom.isNotBlank() && File(custom).isFile) {
-            publish(Active(false, custom), extractAccent(File(custom)))
-            return@withContext
-        }
+    private suspend fun apply(context: Context, settings: ObsiSettings, versionId: String?) =
+        withContext(Dispatchers.IO) {
+            val latest = fetchLatestRelease()
 
-        // trailer for the latest release
-        val trailer = Paths.trailerFile(context)
-        val manifestLatest = runCatching {
-            JSONObject(Http.get(LATEST_URL) ?: "{}").optJSONObject("latest")?.optString("release").orEmpty()
-        }.getOrNull()
-        if (manifestLatest != null && manifestLatest.isNotEmpty() &&
-            versionId == manifestLatest && trailer.isFile && trailer.length() > 0
-        ) {
-            publish(Active(true, null), accent.value)
-            return@withContext
-        }
+            val custom = settings.customWallpaperValue
+            if (custom.isNotBlank() && File(custom).isFile) {
+                publish(Active(false, custom), extractAccent(File(custom)))
+                return@withContext
+            }
 
-        val packDir = packForVersion(versionId, manifestLatest)
-        val artwork = ensureArtwork(packDir, versionId)
-        if (artwork == null) {
-            publish(Active(false, null), accent.value)
-            return@withContext
+            // Video background: only for the latest release, only when the user
+            // picked the video mode in the wizard / settings.
+            if (settings.backgroundModeValue == BackgroundMode.VIDEO &&
+                versionId != null && latest.isNotEmpty() && versionId == latest
+            ) {
+                val trailer = Paths.trailerFile(context)
+                if (trailer.isFile && trailer.length() > 0) {
+                    videoBg.value = VideoBg.Ready
+                    publish(Active(true, null), accent.value)
+                    return@withContext
+                }
+                ensureVideo() // download in the background; wallpaper stays meanwhile
+            }
+
+            val packDir = packForVersion(versionId, latest)
+            val artwork = ensureArtwork(packDir, versionId)
+            if (artwork == null) {
+                publish(Active(false, null), accent.value)
+                return@withContext
+            }
+            publish(Active(false, artwork.absolutePath), extractAccent(artwork))
         }
-        publish(Active(false, artwork.absolutePath), extractAccent(artwork))
-    }
 
     private fun publish(a: Active, newAccent: Int) {
         active.value = a
         accent.value = newAccent
+    }
+
+    /** Latest release according to Mojang's manifest (cached for the session). */
+    private fun fetchLatestRelease(): String {
+        latestRelease.value.takeIf { it.isNotEmpty() }?.let { return it }
+        val v = runCatching {
+            JSONObject(Http.get(LATEST_URL) ?: "{}")
+                .optJSONObject("latest")?.optString("release").orEmpty()
+        }.getOrDefault("")
+        latestRelease.value = v
+        return v
+    }
+
+    /** Latest known release without touching the network again. */
+    fun cachedLatestRelease(): String = latestRelease.value
+
+    /**
+     * Fetches the trailer with the pytube-style resolver and stores it as
+     * `obsi/trailer.mp4`. A single download runs at a time; on success the
+     * background re-syncs so the video starts immediately.
+     */
+    fun ensureVideo() {
+        if (!videoDownloading.compareAndSet(false, true)) return
+        videoBg.value = VideoBg.Idle
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val dest = Paths.trailerFile(context)
+                dest.parentFile?.mkdirs()
+                val result = YouTube.download(YouTube.TRAILER_VIDEO_ID, dest) { done, total ->
+                    videoBg.value = VideoBg.Downloading(done, total)
+                }
+                if (dest.length() <= 0) throw java.io.IOException("empty download")
+                videoBg.value = VideoBg.Ready
+                videoDownloading.set(false)
+                sync(settings.selectedVersionValue.ifBlank { null })
+            } catch (e: Exception) {
+                videoDownloading.set(false)
+                Paths.trailerFile(context).delete()
+                videoBg.value = VideoBg.Failed(e.message ?: "download failed")
+            }
+        }
     }
 
     private fun extractAccent(image: File): Int = runCatching {
@@ -118,8 +182,7 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
     // ---- packs -----------------------------------------------------------------
 
     private fun packForVersion(versionId: String?, latestRelease: String?): String =
-        if (versionId != null && latestRelease != null && versionId == latestRelease) WILDERNESS
-        else if (isAtLeast(versionId)) WILDERNESS else LEGACY
+        if (isAtLeast(versionId)) WILDERNESS else LEGACY
 
     private fun isAtLeast(mcVersion: String?, ref: String = "1.12.2"): Boolean {
         if (mcVersion == null) return true
@@ -166,8 +229,8 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
         val files = (packDir.listFiles { f -> f.isFile && isImage(f) }?.toList() ?: emptyList())
             .ifEmpty { packDir.walkTopDown().filter { it.isFile && isImage(it) }.toList() }
         if (files.isEmpty()) return pickExisting(root)
-        return pickVariant(files, portrait = context.resources.configuration.screenWidthDp <
-            context.resources.configuration.screenHeightDp)
+        // the launcher is landscape-only: always prefer landscape artwork
+        return pickVariant(files, portrait = false)
     }
 
     private fun pickExisting(root: File): File? =
@@ -209,8 +272,8 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
 }
 
 /**
- * The full-screen wallpaper backdrop: image with blur + scrims, or the trailer
- * video when [ObsiWallpaper.Active.isVideo] is set.
+ * The full-screen backdrop: the looping trailer when [ObsiWallpaper.Active.isVideo]
+ * is set, otherwise the version wallpaper with blur + scrims.
  */
 @Composable
 fun ObsiWallpaperLayer(wallpaper: ObsiWallpaper, blurPx: Int, modifier: Modifier = Modifier) {

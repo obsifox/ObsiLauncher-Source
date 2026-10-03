@@ -30,6 +30,7 @@ import studio.obsifox.obsilauncher.ui.screens.ConsoleScreen
 import studio.obsifox.obsilauncher.ui.screens.HomeScreen
 import studio.obsifox.obsilauncher.ui.screens.InstanceDetailScreen
 import studio.obsifox.obsilauncher.ui.screens.SettingsScreen
+import studio.obsifox.obsilauncher.ui.screens.SetupWizard
 import studio.obsifox.obsilauncher.ui.screens.VersionsScreen
 import studio.obsifox.obsilauncher.ui.screens.stringResourceCompat
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
@@ -63,9 +64,16 @@ fun ObsiApp() {
     val gameState by app.gameManager.state.collectAsState()
     val wallpaperActive by app.wallpaper.active.collectAsState()
 
-    // wallpaper follows the active instance's version
+    // wallpaper follows the active instance's version — always, wizard included
     LaunchedEffect(selected) {
         app.wallpaper.sync(selected.ifBlank { null })
+    }
+
+    // first launch: the setup wizard replaces the whole launcher shell
+    val setupDone by app.settings.setupDone.collectAsState()
+    if (!setupDone) {
+        SetupWizard()
+        return
     }
 
     Scaffold(

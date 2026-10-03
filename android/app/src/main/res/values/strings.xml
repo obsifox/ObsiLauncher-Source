@@ -14,7 +14,7 @@
     <string name="home_no_account">No account — add an offline profile in Accounts</string>
     <string name="home_version_ready">%1$s is ready to play</string>
     <string name="home_missing_runtime">Runtime pack missing — install it from Settings → Runtime</string>
-    <string name="home_wallpaper_note">Background artwork for the selected version is fetched from minecraft.net</string>
+    <string name="home_wallpaper_note">Two background types: the official trailer video for the latest release, or per-version wallpapers from minecraft.net — the launcher theme recolors itself to match the artwork</string>
     <string name="home_launching">Starting %1$s…</string>
     <string name="home_instances">Instances</string>
     <string name="home_no_instances">No instances yet — install a version to create one</string>
@@ -176,4 +176,37 @@
     <string name="err_generic">Something went wrong: %1$s</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
+
+    <!-- 1.5.0 setup wizard -->
+    <string name="wizard_welcome_title">Welcome to ObsiLauncher</string>
+    <string name="wizard_welcome_body">A free, open-source Minecraft launcher for Android — no access keys, no locked features. Four quick steps and you are in.</string>
+    <string name="wizard_start">Get started</string>
+    <string name="wizard_bg_title">Pick your background</string>
+    <string name="wizard_bg_hint">Two background types are built in — you can switch any time in Settings → Background.</string>
+    <string name="wizard_bg_video">Live video</string>
+    <string name="wizard_bg_video_desc">The official trailer plays muted behind the launcher. Only the latest Minecraft release gets the video — other versions automatically show their wallpaper.</string>
+    <string name="wizard_bg_wallpaper">Official wallpapers</string>
+    <string name="wizard_bg_wallpaper_desc">Every version gets its official minecraft.net artwork and the launcher recolors itself to match it (Obsi Dynamic).</string>
+    <string name="wizard_next">Next</string>
+    <string name="wizard_account_title">Your player profile</string>
+    <string name="wizard_account_body">Create a free offline profile now — no Microsoft account needed. You can add a Microsoft account later in Accounts.</string>
+    <string name="wizard_account_existing">Existing profile: %1$s</string>
+    <string name="wizard_account_error">Name must be 3–16 letters, digits or _</string>
+    <string name="wizard_done_title">You are all set!</string>
+    <string name="wizard_done_body">Install a version in the Versions tab, then hit Play. Have fun!</string>
+    <string name="wizard_enter">Enter ObsiLauncher</string>
+
+    <!-- 1.5.0 background settings -->
+    <string name="settings_background">Background</string>
+    <string name="settings_bg_mode">Background type</string>
+    <string name="settings_bg_wallpaper">Wallpaper (per version)</string>
+    <string name="settings_bg_video">Video (latest version only)</string>
+    <string name="settings_bg_video_note">The live video plays only while the latest Minecraft release is selected; every other version automatically falls back to its wallpaper.</string>
+    <string name="settings_bg_video_status">Trailer video</string>
+    <string name="settings_bg_video_ready">Downloaded and ready</string>
+    <string name="settings_bg_video_missing">Not downloaded yet</string>
+    <string name="settings_bg_video_download">Download video</string>
+    <string name="settings_bg_video_downloading">Downloading…</string>
+    <string name="settings_bg_video_failed">Download failed: %1$s</string>
+    <string name="settings_bg_resync">Re-sync background</string>
 </resources>

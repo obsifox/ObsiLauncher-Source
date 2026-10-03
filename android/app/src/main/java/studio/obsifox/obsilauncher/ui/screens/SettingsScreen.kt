@@ -56,6 +56,8 @@ fun SettingsScreen() {
     val packProgress by app.runtimePacks.progress.collectAsState()
     val customWallpaper by app.settings.customWallpaper.collectAsState()
     val language by app.settings.language.collectAsState()
+    val backgroundMode by app.settings.backgroundMode.collectAsState()
+    val videoBg by app.wallpaper.videoBg.collectAsState()
 
     var packUrl by remember { mutableStateOf("") }
     var javaArgsDraft by remember(javaArgs) { mutableStateOf(javaArgs) }
@@ -81,6 +83,96 @@ fun SettingsScreen() {
             .verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp),
     ) {
+        SectionTitle(stringResourceCompat(R.string.settings_background))
+        GlassCard {
+            Text(
+                stringResourceCompat(R.string.settings_bg_mode),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Row(modifier = Modifier.padding(top = 6.dp)) {
+                ObsiGhostButton(
+                    text = if (backgroundMode == studio.obsifox.obsilauncher.core.BackgroundMode.WALLPAPER) {
+                        "● ${stringResourceCompat(R.string.settings_bg_wallpaper)}"
+                    } else {
+                        "○ ${stringResourceCompat(R.string.settings_bg_wallpaper)}"
+                    },
+                    onClick = {
+                        app.settings.backgroundModeValue = studio.obsifox.obsilauncher.core.BackgroundMode.WALLPAPER
+                        app.wallpaper.sync(app.settings.selectedVersionValue)
+                    },
+                    enabled = backgroundMode != studio.obsifox.obsilauncher.core.BackgroundMode.WALLPAPER,
+                )
+            }
+            Row(modifier = Modifier.padding(top = 4.dp)) {
+                ObsiGhostButton(
+                    text = if (backgroundMode == studio.obsifox.obsilauncher.core.BackgroundMode.VIDEO) {
+                        "● ${stringResourceCompat(R.string.settings_bg_video)}"
+                    } else {
+                        "○ ${stringResourceCompat(R.string.settings_bg_video)}"
+                    },
+                    onClick = {
+                        app.settings.backgroundModeValue = studio.obsifox.obsilauncher.core.BackgroundMode.VIDEO
+                        app.wallpaper.sync(app.settings.selectedVersionValue)
+                    },
+                    enabled = backgroundMode != studio.obsifox.obsilauncher.core.BackgroundMode.VIDEO,
+                )
+            }
+            Text(
+                stringResourceCompat(R.string.settings_bg_video_note),
+                style = MaterialTheme.typography.bodyMedium,
+                color = obsi.textDim,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResourceCompat(R.string.settings_bg_video_status),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            when (val vb = videoBg) {
+                is studio.obsifox.obsilauncher.obsi.VideoBg.Downloading -> ProgressRow(
+                    label = "${stringResourceCompat(R.string.settings_bg_video_downloading)} " +
+                        "${vb.done / 1024 / 1024} / ${if (vb.total > 0) vb.total / 1024 / 1024 else "?"} MB",
+                    fraction = if (vb.total > 0) vb.done.toFloat() / vb.total else null,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                is studio.obsifox.obsilauncher.obsi.VideoBg.Failed -> {
+                    Text(
+                        stringResourceCompat(R.string.settings_bg_video_failed, vb.message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = obsi.danger,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    ObsiTextButton(
+                        stringResourceCompat(R.string.dl_retry),
+                        onClick = { app.wallpaper.ensureVideo() },
+                    )
+                }
+                studio.obsifox.obsilauncher.obsi.VideoBg.Ready -> Text(
+                    stringResourceCompat(R.string.settings_bg_video_ready),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = obsi.accent,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                else -> Text(
+                    stringResourceCompat(R.string.settings_bg_video_missing),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = obsi.textDim,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            ObsiButton(
+                text = stringResourceCompat(R.string.settings_bg_video_download),
+                onClick = { app.wallpaper.ensureVideo() },
+                enabled = videoBg !is studio.obsifox.obsilauncher.obsi.VideoBg.Downloading,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            ObsiTextButton(
+                text = stringResourceCompat(R.string.settings_bg_resync),
+                onClick = { app.wallpaper.sync(app.settings.selectedVersionValue) },
+            )
+        }
+
         SectionTitle(stringResourceCompat(R.string.settings_appearance))
         GlassCard {
             val modes = listOf(

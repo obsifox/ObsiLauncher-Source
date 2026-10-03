@@ -2,8 +2,8 @@ import java.util.Properties
 import com.android.build.api.variant.impl.VariantOutputImpl
 
 // ObsiLauncher release identity (bump here and in defaultConfig)
-val APP_VERSION_NAME = "1.4.0"
-val APP_VERSION_CODE = 10400
+val APP_VERSION_NAME = "1.5.0"
+val APP_VERSION_CODE = 10500
 
 plugins {
     alias(libs.plugins.android.application)
