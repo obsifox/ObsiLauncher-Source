@@ -15,6 +15,7 @@
     <string name="home_no_account">حسابی نیست — در بخش حساب‌ها یک پروفایل بسازید</string>
     <string name="home_version_ready">‏%1$s آماده‌ی بازی است</string>
     <string name="home_missing_runtime">پک ران‌تایم نصب نیست — از تنظیمات ← ران‌تایم نصبش کنید</string>
+    <string name="home_runtime_preparing">در حال آماده‌سازی ران‌تایم (جاوا)…</string>
     <string name="home_wallpaper_note">دو نوع بک‌گراند: ویدیوی تریلر همراه برنامه برای آخرین نسخه (پخش می‌شود، بعد والپیپر ۴۵ ثانیه روی صفحه می‌ماند و بعد دوباره ویدیو — لوپ بی‌نهایت)، یا والپیپر رسمی هر نسخه از minecraft.net — رنگ‌بندی لانچر با artwork هماهنگ می‌شود</string>
     <string name="home_launching">در حال اجرای %1$s…</string>
     <string name="home_instances">اینستنس‌ها</string>

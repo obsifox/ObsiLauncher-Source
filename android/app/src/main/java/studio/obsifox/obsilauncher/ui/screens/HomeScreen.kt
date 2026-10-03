@@ -34,8 +34,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -88,23 +86,30 @@ fun HomeScreen(
     val pack = packs.firstOrNull { it.name == runtimePack } ?: packs.firstOrNull()
     val hasVersion = active != null && app.installer.isInstalled(active.versionId)
 
-    // ---- the big button's three states (v1.9.0) ----------------------------
-    // gray  = the selected version is not downloaded yet  -> "DOWNLOAD"
-    // blue  = a download is running (fills from the language's start side)
-    // green = downloaded and ready                        -> "PLAY"
+    // ---- the big button's three states (v1.12.0, the user's PNG palette) ---
+    // blue  = the selected version is not downloaded yet   -> "DOWNLOAD"
+    // gray  = a download is running; a GREEN fill grows    -> from the
+    //         language's start corner (right in FA, left in EN)
+    // green = downloaded and ready                         -> "PLAY"
     val runningInstall = installing as? studio.obsifox.obsilauncher.core.game.InstallState.Running
     val runningLoader = loaderInstalling as? studio.obsifox.obsilauncher.core.game.InstallState.Running
+    val runtimeInstalling by app.runtimePacks.installing.collectAsState()
+    val runtimeProgress by app.runtimePacks.progress.collectAsState()
     val downloadProgress: Float? = when {
         runningInstall != null -> runningInstall.fraction
             ?: if (runningInstall.total > 0) runningInstall.done.toFloat() / runningInstall.total else 0f
         runningLoader != null -> runningLoader.fraction ?: 0.5f
+        // v1.12.0 — the runtime/JVM auto-download shows on the very same button
+        runtimeInstalling -> runtimeProgress ?: 0.02f
         else -> null
     }
-    val canDownload = selectedVersion.isNotBlank() && downloadProgress == null &&
-        gameState != GameState.RUNNING && gameState != GameState.PREPARING
-    val canPlay = hasVersion && account != null && pack != null &&
-        gameState != GameState.RUNNING && gameState != GameState.PREPARING &&
-        downloadProgress == null
+    // v1.12.0 — the runtime must be COMPLETE (libjvm.so really there), not just
+    // "a folder exists", or the game dies the moment it is spawned
+    val runtimeReady = pack?.isComplete() == true
+    val busy = gameState == GameState.RUNNING || gameState == GameState.PREPARING || downloadProgress != null
+    val canDownload = !busy &&
+        ((selectedVersion.isNotBlank() && !hasVersion) || !runtimeReady)
+    val canPlay = hasVersion && account != null && runtimeReady && !busy
 
     Box(Modifier.fillMaxSize()) {
         // empty state ----------------------------------------------------------
@@ -193,7 +198,7 @@ fun HomeScreen(
                         text = when {
                             !hasVersion -> stringResourceCompat(R.string.home_no_version)
                             account == null -> stringResourceCompat(R.string.home_no_account)
-                            pack == null -> stringResourceCompat(R.string.home_missing_runtime)
+                            !runtimeReady -> stringResourceCompat(R.string.home_missing_runtime)
                             else -> ""
                         },
                         accent = Color(0xFFE5A24C),
@@ -205,13 +210,23 @@ fun HomeScreen(
                         onAction = when {
                             !hasVersion -> onDownload
                             account == null -> onPickAccount
-                            else -> onPickVersion
+                            else -> onPlay
                         },
+                    )
+                }
+                // v1.12.0 — the runtime download runs through the same button,
+                // but say WHAT is being fetched so the wait is not a mystery
+                runtimeInstalling && runningInstall == null -> {
+                    StatusChip(
+                        text = stringResourceCompat(R.string.home_runtime_preparing),
+                        accent = obsi.accent,
+                        actionText = stringResourceCompat(R.string.console_title),
+                        onAction = onOpenConsole,
                     )
                 }
             }
             if (gameState == GameState.RUNNING || gameState == GameState.PREPARING ||
-                (!canPlay && downloadProgress == null && runningLoader == null)
+                (!canPlay && runningLoader == null)
             ) {
                 Spacer(Modifier.height(8.dp))
             }
@@ -291,7 +306,17 @@ fun HomeScreen(
                     ready = canPlay,
                     enabled = canPlay || canDownload,
                     subtitle = active?.let { loaderBadge(it) } ?: selectedVersion,
-                    onClick = { if (canPlay) onPlay() else if (canDownload) onDownload() },
+                    // v1.12.0 — PLAY now runs the pre-flight: missing version
+                    // files and a missing/incomplete runtime are downloaded
+                    // first, then the game spawns. A missing runtime is thus
+                    // fixable straight from the big button.
+                    onClick = {
+                        when {
+                            canPlay -> onPlay()
+                            canDownload && !hasVersion -> onDownload()
+                            canDownload -> onPlay() // runtime fetch via pre-flight
+                        }
+                    },
                 )
             }
         }
@@ -300,16 +325,23 @@ fun HomeScreen(
 
 /**
  * The big bottom-right button — PLAY when ready, DOWNLOAD otherwise —
- * drawn exactly like the classic Minecraft button the user picked as the
- * reference: flat green face, hard dark border, a chunky dark bevel along
- * the bottom edge and bold white text.
+ * built pixel-faithful to the buttons the user supplied for v1.12.0
+ * (blue_button / gray_button / green_button.png):
  *
- * v1.11.0 fix: the button has a FIXED height. The download fill is painted
- * with drawBehind, so it can never stretch the layout (the old fillMaxHeight
- * fill box used to swallow all free vertical space and push the whole
- * dashboard up under the top bar). The fill still grows from the language's
- * start corner — right side in Farsi (RTL), left side in English (LTR) —
- * and the button turns fully green the moment the game is ready.
+ *   [ light top strip ]  ~10% of the height, the classic plastic highlight
+ *   [ flat face       ]  the button's main colour
+ *   [ dark bevel      ]  ~12% along the bottom, the 3D edge
+ *   [ black border    ]  2dp frame all around, sharp corners
+ *
+ * State colours, exactly as briefed ("از آبی به خاکستری، همزمان با دانلود
+ * از خاکستری به سبز"):
+ *   BLUE  = not downloaded yet                    -> tap to download
+ *   GRAY  = a download is running; a GREEN fill   -> grows from the
+ *           language's start corner (right in FA, left in EN)
+ *   GREEN = everything installed                  -> PLAY
+ *
+ * v1.12.0 fix: the button has a FIXED height (84dp) — the fill is painted
+ * with drawBehind and can never stretch the layout again.
  */
 @Composable
 private fun PlayButton(
@@ -320,72 +352,53 @@ private fun PlayButton(
     subtitle: String,
     onClick: () -> Unit,
 ) {
-    val obsi = LocalObsi.current
     // fixed geometry — the button can never grow beyond this, no matter
     // what the progress fill does
-    val height = 78.dp
-    val bevel = 5.dp
-    val corner = 8.dp
+    val height = 84.dp
+    val corner = 2.dp
     val shape = RoundedCornerShape(corner)
 
-    val faceTop: Color
-    val faceBottom: Color
-    val bevelColor: Color
-    val contentColor: Color
-    when {
-        progress != null -> {          // downloading: charcoal face + blue fill
-            faceTop = Color(0xFF3A3A40); faceBottom = Color(0xFF2A2A2E)
-            bevelColor = Color(0xFF101012); contentColor = Color.White
-        }
-        ready -> {                     // ready: the Minecraft green from the reference
-            faceTop = Color(0xFF5FAF3C); faceBottom = Color(0xFF3C8527)
-            bevelColor = Color(0xFF1C4712); contentColor = Color.White
-        }
-        enabled -> {                   // not downloaded yet: neutral gray
-            faceTop = Color(0xFF8A8A8F); faceBottom = Color(0xFF606065)
-            bevelColor = Color(0xFF2A2A2E); contentColor = Color.White
-        }
-        else -> {                      // disabled
-            faceTop = Color(0xFF54545A); faceBottom = Color(0xFF46464C)
-            bevelColor = Color(0xFF202024); contentColor = Color(0xFFC9C9CC)
-        }
+    // palettes sampled straight from the user's PNG assets
+    class Skin(val top: Color, val face: Color, val bevel: Color)
+    val skin = when {
+        progress != null -> Skin(Color(0xFF949494), Color(0xFF575757), Color(0xFF434343)) // gray base
+        ready            -> Skin(Color(0xFF00D01F), Color(0xFF008318), Color(0xFF042D0A)) // green
+        enabled          -> Skin(Color(0xFF5BA5FF), Color(0xFF2C8BFF), Color(0xFF003B83)) // blue
+        else             -> Skin(Color(0xFF6A6A6E), Color(0xFF46464C), Color(0xFF1C1C20)) // disabled
     }
-    val fillColor = if (progress != null && progress >= 1f) Color(0xFF3C8527) else Color(0xFF3B79C4)
+    // the fill carries the green skin of the ready button
+    val fillFace = Color(0xFF008318)
+    val fillTop = Color(0xFF21CB35)
 
     Box(
         Modifier
-            .widthIn(min = 230.dp)
+            .widthIn(min = 250.dp)
             .height(height)
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(faceTop, faceBottom)))
-            .border(1.dp, Color(0xFF17181A), shape)
+            .background(skin.face)
+            .border(2.dp, Color.Black, shape)
             .drawBehind {
-                // the dark 3D bevel along the bottom edge — the Minecraft look
-                val b = bevel.toPx()
-                drawRect(bevelColor, topLeft = Offset(0f, size.height - b), size = Size(size.width, b))
+                val strip = size.height * 0.10f
+                val bevelH = size.height * 0.12f
+                // 1) the light top strip of the BASE skin
+                drawRect(skin.top, size = Size(size.width, strip))
+                // 2) the progress fill replaces both strip and face in its
+                //    region so the green block reads as a real button half
+                if (progress != null) {
+                    val fraction = progress.coerceIn(0f, 1f)
+                    val w = size.width * fraction
+                    val start = when (layoutDirection) {
+                        androidx.compose.ui.unit.LayoutDirection.Rtl -> size.width - w
+                        else -> 0f
+                    }
+                    drawRect(fillFace, topLeft = Offset(start, strip), size = Size(w, size.height - strip - bevelH))
+                    drawRect(fillTop, topLeft = Offset(start, 0f), size = Size(w, strip))
+                }
+                // 3) the dark 3D bevel along the bottom edge — always on top
+                drawRect(skin.bevel, topLeft = Offset(0f, size.height - bevelH), size = Size(size.width, bevelH))
             }
             .clickable(enabled = enabled, onClick = onClick),
     ) {
-        // the progress fill — painted UNDER the text, from the START side
-        // (right in Farsi, left in English), never affecting measurement
-        if (progress != null) {
-            val fraction = progress.coerceIn(0f, 1f)
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .drawBehind {
-                        val w = size.width * fraction
-                        val start = when (layoutDirection) {
-                            androidx.compose.ui.unit.LayoutDirection.Rtl -> size.width - w
-                            else -> 0f
-                        }
-                        drawRect(fillColor, topLeft = Offset(start, 0f), size = Size(w, size.height))
-                        // keep the bevel visible above the fill
-                        val b = bevel.toPx()
-                        drawRect(bevelColor, topLeft = Offset(0f, size.height - b), size = Size(size.width, b))
-                    },
-            )
-        }
         Column(
             Modifier.fillMaxHeight().padding(horizontal = 28.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -396,7 +409,7 @@ private fun PlayButton(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 3.sp,
-                color = contentColor,
+                color = Color.White,
                 maxLines = 1,
             )
             if (progress != null) {
@@ -404,13 +417,13 @@ private fun PlayButton(
                     text = "${(progress.coerceIn(0f, 1f) * 100).toInt()}%",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = contentColor,
+                    color = Color.White,
                 )
             } else if (subtitle.isNotBlank()) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelMedium,
-                    color = contentColor.copy(alpha = 0.85f),
+                    color = Color.White.copy(alpha = 0.9f),
                     maxLines = 1,
                 )
             }
@@ -418,24 +431,63 @@ private fun PlayButton(
     }
 }
 
-/** v1.11.0 — round speaker toggle for the bundled video, dashboard-sized. */
+/**
+ * v1.12.0 — the square Minecraft sound button, pixel-faithful to the two
+ * assets the user supplied (sound_button.png / m_sound_music.png):
+ * black frame, light top strip, dark bottom edge, a chunky white note.
+ * GREEN face = sound on, CHARCOAL face = muted.
+ */
 @Composable
 private fun MuteButton(muted: Boolean, onToggle: () -> Unit) {
     val muteDesc = stringResourceCompat(if (muted) R.string.bg_unmute else R.string.bg_mute)
+    val face = if (muted) Color(0xFF333333) else Color(0xFF008318)
+    val strip = if (muted) Color(0xFF8C8C8C) else Color(0xFF4EFF69)
+    val shape = RoundedCornerShape(2.dp)
     Box(
         Modifier
-            .size(34.dp)
-            .clip(CircleShape)
-            .background(Color(0x99140F0C))
-            .border(1.dp, Color(0x33FFFFFF), CircleShape)
+            .size(40.dp)
+            .clip(shape)
+            .background(face)
+            .border(2.dp, Color.Black, shape)
+            .drawBehind {
+                // the classic plastic anatomy: light strip up top, black edge below
+                val s = size.height * 0.16f
+                drawRect(strip, size = Size(size.width, s))
+                val b = size.height * 0.12f
+                drawRect(Color.Black, topLeft = Offset(0f, size.height - b), size = Size(size.width, b))
+            }
             .clickable(onClick = onToggle)
             .semantics { contentDescription = muteDesc },
         contentAlignment = Alignment.Center,
     ) {
-        SpeakerIcon(
-            muted = muted,
-            color = Color(0xFFF4EFEA),
-            modifier = Modifier.size(19.dp),
+        MusicNoteIcon(
+            color = Color(0xFFEFEFEF),
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/** the chunky eighth note from the user's sound buttons — head, stem, flag. */
+@Composable
+private fun MusicNoteIcon(modifier: Modifier = Modifier, color: Color) {
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        // head: a filled oval sitting bottom-left
+        val headW = w * 0.46f
+        val headH = h * 0.32f
+        val headCx = w * 0.33f
+        val headCy = h * 0.72f
+        // stem: a thick bar rising from the head's right edge to the top
+        val stemW = w * 0.10f
+        val stemX = headCx + headW / 2f - stemW
+        drawRect(color, topLeft = Offset(stemX, h * 0.10f), size = Size(stemW, headCy - h * 0.10f))
+        // flag: a chunky block hanging right from the stem's top
+        drawRect(color, topLeft = Offset(stemX, h * 0.10f), size = Size(w * 0.30f, h * 0.26f))
+        drawOval(
+            color,
+            topLeft = Offset(headCx - headW / 2f, headCy - headH / 2f),
+            size = Size(headW, headH),
         )
     }
 }
@@ -582,52 +634,6 @@ private fun GamepadIcon(modifier: Modifier = Modifier, color: Color) {
         // buttons (right)
         drawCircle(color, radius = stroke * 0.75f, center = Offset(w * 0.68f, cy - arm * 0.5f))
         drawCircle(color, radius = stroke * 0.75f, center = Offset(w * 0.76f, cy + arm * 0.5f))
-    }
-}
-
-/** speaker with sound waves — crossed out when the video is muted. */
-@Composable
-private fun SpeakerIcon(muted: Boolean, modifier: Modifier = Modifier, color: Color) {
-    Canvas(modifier) {
-        val stroke = 1.7.dp.toPx()
-        val w = size.width
-        val h = size.height
-        // speaker body: box + cone
-        val body = Path().apply {
-            moveTo(w * 0.18f, h * 0.40f)
-            lineTo(w * 0.40f, h * 0.40f)
-            lineTo(w * 0.58f, h * 0.24f)
-            lineTo(w * 0.58f, h * 0.76f)
-            lineTo(w * 0.40f, h * 0.60f)
-            lineTo(w * 0.18f, h * 0.60f)
-            close()
-        }
-        drawPath(body, color, style = Stroke(stroke, join = StrokeJoin.Round))
-        if (muted) {
-            // a clean X where the waves would be
-            drawLine(color, Offset(w * 0.68f, h * 0.36f), Offset(w * 0.86f, h * 0.64f), stroke)
-            drawLine(color, Offset(w * 0.86f, h * 0.36f), Offset(w * 0.68f, h * 0.64f), stroke)
-        } else {
-            // two open sound waves
-            drawArc(
-                color,
-                startAngle = -52f,
-                sweepAngle = 104f,
-                useCenter = false,
-                topLeft = Offset(w * 0.56f, h * 0.30f),
-                size = Size(w * 0.20f, h * 0.40f),
-                style = Stroke(stroke),
-            )
-            drawArc(
-                color,
-                startAngle = -52f,
-                sweepAngle = 104f,
-                useCenter = false,
-                topLeft = Offset(w * 0.64f, h * 0.18f),
-                size = Size(w * 0.34f, h * 0.64f),
-                style = Stroke(stroke),
-            )
-        }
     }
 }
 

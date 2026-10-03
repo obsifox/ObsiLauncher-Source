@@ -16,6 +16,7 @@
     <string name="home_no_account">No account — add an offline profile in Accounts</string>
     <string name="home_version_ready">%1$s is ready to play</string>
     <string name="home_missing_runtime">Runtime pack missing — install it from Settings → Runtime</string>
+    <string name="home_runtime_preparing">Getting the runtime (Java) ready…</string>
     <string name="home_wallpaper_note">Two background types: the bundled trailer video for the latest release (plays, then the wallpaper rests for 45 s, then the video loops back), or per-version wallpapers from minecraft.net — the launcher theme recolors itself to match the artwork</string>
     <string name="home_launching">Starting %1$s…</string>
     <string name="home_instances">Instances</string>

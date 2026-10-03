@@ -72,7 +72,9 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
     suspend fun checkRuntime() = withContext(Dispatchers.IO) {
         step.value = Step.CheckingRuntime
         runtimePacks.rescan()
-        val valid = runtimePacks.packs.value.any { it.isValid() }
+        // v1.12.0: isComplete() — a pack that lost its libjvm.so must be
+        // re-downloaded, not trusted (it used to crash the game on PLAY)
+        val valid = runtimePacks.packs.value.any { it.isComplete() }
         if (valid) {
             step.value = Step.Ready
             return@withContext
@@ -87,7 +89,7 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
                 step.value = Step.InstallingRuntime(null)
                 runtimePacks.installAuto(url, RuntimePacks.nameFor(url))
                 runtimePacks.rescan()
-                if (runtimePacks.packs.value.any { it.isValid() }) {
+                if (runtimePacks.packs.value.any { it.isComplete() }) {
                     step.value = Step.Ready
                     return@withContext
                 }

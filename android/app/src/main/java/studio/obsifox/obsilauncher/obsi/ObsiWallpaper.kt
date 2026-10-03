@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -59,7 +60,14 @@ import kotlin.math.ln
  */
 class ObsiWallpaper(private val context: Context, val settings: ObsiSettings) {
 
-    data class Active(val isVideo: Boolean, val imagePath: String?, val resId: Int? = null)
+    data class Active(
+        val isVideo: Boolean,
+        val imagePath: String?,
+        val resId: Int? = null,
+        /** v1.12.0 — the version this state belongs to; the video cycle keys
+         *  off it so switching versions lands on the photo immediately. */
+        val versionId: String? = null,
+    )
 
     val active = MutableStateFlow(Active(isVideo = false, imagePath = null))
     val accent = MutableStateFlow(0xFFFF8A3D.toInt())
@@ -111,6 +119,7 @@ class ObsiWallpaper(private val context: Context, val settings: ObsiSettings) {
                     isVideo = videoNow,
                     imagePath = null,
                     resId = bundledArtFor(versionId),
+                    versionId = versionId,
                 ),
                 accent.value,
             )
@@ -127,6 +136,7 @@ class ObsiWallpaper(private val context: Context, val settings: ObsiSettings) {
                     isVideo = true,
                     imagePath = artwork?.absolutePath,
                     resId = if (artwork == null) bundledArtFor(versionId) else null,
+                    versionId = versionId,
                 )
                 resolved[cacheKey] = state
                 publish(state, acc)
@@ -136,13 +146,13 @@ class ObsiWallpaper(private val context: Context, val settings: ObsiSettings) {
             // the remote latest release differs from the cached one and flips
             // the video gate off — re-publish the plain wallpaper instantly
             if (!video && videoNow) {
-                publish(Active(false, null, bundledArtFor(versionId)), accent.value)
+                publish(Active(false, null, bundledArtFor(versionId), versionId), accent.value)
             }
 
             val packDir = packForVersion(versionId, latest)
             val artwork = ensureArtwork(packDir, versionId)
             if (artwork == null) return@withContext // keep the bundled art
-            val state = Active(false, artwork.absolutePath)
+            val state = Active(false, artwork.absolutePath, null, versionId)
             resolved[cacheKey] = state
             publish(state, extractAccent(artwork))
         }
@@ -370,6 +380,7 @@ fun ObsiWallpaperLayer(wallpaper: ObsiWallpaper, blurPx: Int, modifier: Modifier
                 restImagePath = path,
                 restResId = active.resId,
                 muted = muted,
+                versionKey = active.versionId,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -420,28 +431,60 @@ private fun Int.dp() = androidx.compose.ui.unit.Dp(this.toFloat())
 /** Phases of the v1.10.0 background cycle. */
 private enum class VideoPhase { PLAYING, RESTING }
 
+/** the wallpaper eases in over the last second of the video (briefed: the
+ *  final 1 to 0.5 s, slowly), so the cut to the photo is seamless. */
+private const val VIDEO_FADE_MS = 1_200L
+
 /**
  * The background cycle, exactly as briefed:
- * the bundled video plays ONCE -> the version wallpaper holds the screen
- * for 45 seconds -> the video starts again. Endless loop, zero downloads.
+ * the version wallpaper holds the screen -> the bundled video plays ONCE,
+ * fading into the wallpaper across its last second -> 45 s rest -> the video
+ * starts AGAIN FROM ZERO. Endless loop, zero downloads.
+ *
+ * v1.12.0 — switching versions lands DIRECTLY on that version's photo and
+ * restarts the schedule from there ([versionKey]); every replay begins at
+ * 0:00, never mid-way.
  */
 @Composable
 private fun VideoCycleLayer(
     restImagePath: String?,
     restResId: Int?,
     muted: Boolean,
+    versionKey: String?,
     modifier: Modifier = Modifier,
 ) {
-    var phase by remember { mutableStateOf(VideoPhase.PLAYING) }
+    // always ENTER on the photo: the video takes over on the same schedule
+    var phase by remember { mutableStateOf(VideoPhase.RESTING) }
     var cycle by remember { mutableStateOf(0) }
+
+    // version switch -> the new version's photo, immediately, with a fresh
+    // rest timer; the next video pass then starts from zero (new cycle key)
+    LaunchedEffect(versionKey) {
+        phase = VideoPhase.RESTING
+        cycle += 1
+    }
+
     when (phase) {
         VideoPhase.PLAYING -> key(cycle) {
+            var fade by remember { mutableStateOf(0f) }
             BundledVideoSurface(
                 videoRes = R.raw.video_wallpaper,
                 muted = muted,
                 onEnded = { phase = VideoPhase.RESTING },
+                onRemaining = { ms ->
+                    fade = when {
+                        ms <= 0L -> 1f
+                        ms >= VIDEO_FADE_MS -> 0f
+                        else -> 1f - ms.toFloat() / VIDEO_FADE_MS
+                    }
+                },
                 modifier = modifier,
             )
+            // the slow crossfade: the version wallpaper rises over the
+            // video's final second, then the RESTING phase continues it
+            Box(modifier.graphicsLayer { alpha = fade }) {
+                RestArtwork(restImagePath, restResId, Modifier.fillMaxSize())
+            }
         }
         VideoPhase.RESTING -> {
             RestArtwork(restImagePath, restResId, modifier)
@@ -478,12 +521,15 @@ private fun RestArtwork(imagePath: String?, resId: Int?, modifier: Modifier = Mo
  * One pass of the bundled trailer on a SurfaceView. Not self-looping —
  * completion hands over to the 45 s wallpaper rest. Sound follows the
  * user's mute choice and playback pauses with the app lifecycle.
+ * v1.12.0 — [onRemaining] reports the ms left, powering the slow
+ * wallpaper crossfade over the final second; every pass starts at 0:00.
  */
 @Composable
 private fun BundledVideoSurface(
     videoRes: Int,
     muted: Boolean,
     onEnded: () -> Unit,
+    onRemaining: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -492,6 +538,17 @@ private fun BundledVideoSurface(
     // the mute toggle applies to the running player immediately
     LaunchedEffect(muted, player) {
         player?.setVolume(if (muted) 0f else 1f, if (muted) 0f else 1f)
+    }
+    // position polling for the end-of-video crossfade
+    LaunchedEffect(player) {
+        val mp = player ?: return@LaunchedEffect
+        while (true) {
+            val probe = runCatching {
+                if (mp.duration <= 0) Long.MAX_VALUE else (mp.duration - mp.currentPosition).toLong()
+            }.getOrNull() ?: break // released — stop polling
+            onRemaining(probe.coerceAtLeast(0L))
+            delay(100)
+        }
     }
     // no sound (or decoding) while the launcher itself is hidden
     DisposableEffect(lifecycleOwner) {

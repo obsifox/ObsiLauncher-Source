@@ -21,8 +21,38 @@ data class Pack(
     val launcherSo: File,
     val jvmArgs: List<String>,
     val libDirs: List<File>,
+    /** v1.12.0 — deep check done at rescan: the JVM shared object is really there. */
+    val complete: Boolean = false,
 ) {
     fun isValid(): Boolean = launcherSo.isFile && libDirs.all { it.isDirectory }
+
+    /**
+     * v1.12.0 — a pack that LOOKS installed but lost its libjvm.so (interrupted
+     * download, cleaner app, partial unpack) makes the game die the moment PLAY
+     * is pressed. The launch path must treat such a pack as absent and download
+     * it again — so validity for launching is [complete], not just [isValid].
+     */
+    fun isComplete(): Boolean = complete && isValid()
+
+    companion object {
+        /** the one file the JVM cannot boot without — searched under the lib dirs */
+        const val JVM_SO = "libjvm.so"
+
+        /** bounded walk so a huge pack can never stall the caller. */
+        fun findJvmSo(dirs: List<File>): Boolean {
+            for (dir in dirs) {
+                if (!dir.isDirectory) continue
+                var seen = 0
+                var found = false
+                dir.walkTopDown().forEach { f ->
+                    if (seen++ > 8000) return@forEach
+                    if (!found && f.isFile && f.name == JVM_SO && f.length() > 0) found = true
+                }
+                if (found) return true
+            }
+            return false
+        }
+    }
 }
 
 class RuntimePacks(private val context: Context) {
@@ -44,14 +74,18 @@ class RuntimePacks(private val context: Context) {
                 val meta = File(dir, "pack.json")
                 if (!meta.isFile) return@runCatching null
                 val json = JSONObject(meta.readText())
+                val launcherSo = File(dir, json.optString("launcher_so", "lib/launcher.so"))
+                val libDirs = json.optJSONArray("lib_dirs")?.let { arr -> (0 until arr.length()).map { File(dir, arr.getString(it)) } }
+                    ?: listOf(File(dir, "lib"))
                 Pack(
                     name = json.optString("name", dir.name),
                     abi = json.optString("abi", "arm64-v8a"),
                     dir = dir,
-                    launcherSo = File(dir, json.optString("launcher_so", "lib/launcher.so")),
+                    launcherSo = launcherSo,
                     jvmArgs = json.optJSONArray("jvm_args")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } }.orEmpty(),
-                    libDirs = json.optJSONArray("lib_dirs")?.let { arr -> (0 until arr.length()).map { File(dir, arr.getString(it)) } }
-                        ?: listOf(File(dir, "lib")),
+                    libDirs = libDirs,
+                    complete = launcherSo.isFile && launcherSo.length() > 0 &&
+                        libDirs.all { it.isDirectory } && Pack.findJvmSo(libDirs),
                 )
             }.getOrNull()
         }.orEmpty()
@@ -115,7 +149,7 @@ class RuntimePacks(private val context: Context) {
             val pack = packByName(suggestedName) ?: packByName(
                 runCatching { JSONObject(File(outDir, "pack.json").readText()).optString("name", suggestedName) }.getOrDefault(suggestedName)
             )
-            if (pack == null || !pack.isValid()) {
+            if (pack == null || !pack.isComplete()) {
                 throw IllegalStateException("pack is missing its launcher .so or lib dirs")
             }
             message.value = null
@@ -201,7 +235,7 @@ class RuntimePacks(private val context: Context) {
         staging.deleteRecursively()
         rescan()
         val pack = packByName(suggestedName)
-        if (pack == null || !pack.isValid()) {
+        if (pack == null || !pack.isComplete()) {
             throw IllegalStateException("runtime pack failed validation")
         }
     }

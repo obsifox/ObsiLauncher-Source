@@ -69,12 +69,48 @@ val TopBarSpace = 68.dp
  * v1.9.0 — the shared launch routine, used by the PLAY button and by the
  * automatic launch after a download finishes. Refreshes Microsoft tokens
  * when they are close to expiry, then spawns the game and reports back.
+ *
+ * v1.12.0 — PRE-FLIGHT. Pressing PLAY used to crash straight into the game
+ * dying because neither the version files nor the runtime/JVM were verified
+ * first. Now, in order:
+ *  1. the selected version is installed if its files are not on disk
+ *     (the installer re-verifies every sha1 as it downloads);
+ *  2. the runtime pack is deep-checked — a pack that lost its libjvm.so is
+ *     treated as missing and the default pack is downloaded automatically
+ *     (the same auto-provisioning the update gate uses);
+ *  3. only a fully provisioned device reaches the fork/exec.
+ * The big home button shows live progress for both stages.
  */
 internal suspend fun launchGame(
     context: android.content.Context,
     app: studio.obsifox.obsilauncher.App,
     onStarted: () -> Unit,
 ) {
+    val instance = app.instances.active() ?: return
+
+    // ---- 1) version files ---------------------------------------------------
+    if (!app.installer.isInstalled(instance.versionId)) {
+        val v = app.manifest.versions.value.firstOrNull { it.id == instance.versionId }
+            ?: return // unknown version and offline — nothing we can do here
+        if (app.installer.state.value is studio.obsifox.obsilauncher.core.game.InstallState.Running) {
+            return // an install is already in flight; the button shows its progress
+        }
+        app.installer.install(v, app.settings)
+        if (app.installer.state.value !is studio.obsifox.obsilauncher.core.game.InstallState.Done) {
+            return // download failed — the console/button carry the state
+        }
+    }
+
+    // ---- 2) runtime / JVM ---------------------------------------------------
+    var pack = app.runtimePacks.packs.value.firstOrNull { it.isComplete() }
+    if (pack == null) {
+        // missing or broken (e.g. libjvm.so gone) — download a default pack
+        app.updateGate.checkRuntime()
+        pack = app.runtimePacks.packs.value.firstOrNull { it.isComplete() }
+        if (pack == null) return // runtime failed — the gate/settings show it
+    }
+
+    // ---- 3) account + spawn -------------------------------------------------
     var account = app.accounts.active()
     if (account?.isMicrosoft == true &&
         account.tokenExpiresAt < System.currentTimeMillis() + 10 * 60_000L
@@ -92,10 +128,7 @@ internal suspend fun launchGame(
             // fall back to the stored token; the console shows auth errors
         }
     }
-    val instance = app.instances.active()
-    val pack = app.runtimePacks.packByName(app.settings.runtimePackValue)
-        ?: app.runtimePacks.packs.value.firstOrNull()
-    if (instance != null && account != null && pack != null) {
+    if (account != null) {
         app.gameManager.launch(context, instance, account, pack)
         onStarted()
     }
