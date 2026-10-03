@@ -273,4 +273,23 @@
     <string name="instances_rename_title">نام دلخواه</string>
     <string name="instances_rename_save">ذخیره</string>
     <string name="settings_theme_minecraft">ماینکرفت (شکل لانچر رسمی)</string>
+    <string name="set_tab_components">کامپوننت‌ها</string>
+    <string name="components_hint">همه رانتایم‌ها و فایل‌هایی که لانچر استفاده می‌کند. دانلودها دفعه بعد که بازی اجرا شود اعمال می‌شوند. نسخه LWJGL 3.3.6 نسخه اندرویدی است و جایگزین نیاز نسخه‌های 3.3.3 و 3.4.x است.</string>
+    <string name="components_installed">نصب شده</string>
+    <string name="components_downloading">در حال دانلود…</string>
+    <string name="components_runtime_missing">نصب نیست — برای استفاده دانلود کنید</string>
+    <string name="components_delete">حذف</string>
+    <string name="components_download">دانلود</string>
+    <string name="components_pack_hint">پیشرفته: نصب پک رانتایم سفارشی (.tar.xz) با لینک.</string>
+    <string name="game_booting">در حال اجرای بازی…</string>
+    <string name="game_running">بازی در حال اجراست</string>
+    <string name="game_log">گزارش</string>
+    <string name="crash_title">بازی کرش کرد</string>
+    <string name="crash_exit_code">کد خروج %d</string>
+    <string name="crash_copy_code">کپی کد خروج</string>
+    <string name="crash_copied">کپی شد!</string>
+    <string name="crash_close">بستن</string>
+    <string name="crash_empty">هیچ جزئیات خطایی ثبت نشد.</string>
+    <string name="content_import">ورود از دستگاه</string>
+    <string name="content_imported">وارد شد: %s</string>
 </resources>

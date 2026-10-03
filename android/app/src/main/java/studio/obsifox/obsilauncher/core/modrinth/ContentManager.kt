@@ -148,7 +148,13 @@ class ContentManager(private val versionsRoot: File) {
 
     fun versionDir(versionId: String): File = File(versionsRoot, versionId)
 
-    fun gameDir(versionId: String): File = versionDir(versionId)
+    fun gameDir(versionId: String): File {
+        // v1.13.0 — mirror the launch path's rule (LaunchPipeline/GameManager):
+        // when the instance keeps its game files in a "game" subfolder, the
+        // mods the GAME sees live in game/mods — the old code always listed
+        // versions/<id>/mods, so installed mods never showed up
+        return File(versionDir(versionId), "game").takeIf { it.isDirectory } ?: versionDir(versionId)
+    }
 
     fun readManifest(versionId: String): ContentManifest = runCatching {
         val f = manifestFile(versionId)

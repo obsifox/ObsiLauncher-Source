@@ -13,9 +13,18 @@ object Paths {
     fun librariesRoot(ctx: Context): File = File(gamesRoot(ctx), "libraries")
     fun assetsRoot(ctx: Context): File = File(gamesRoot(ctx), "assets")
     fun runtimeRoot(ctx: Context): File = File(ctx.filesDir, "runtime")
+    /** unpacked launcher components (lwjgl3 classes, caciocavallo, authlib-injector…) */
+    fun componentsRoot(ctx: Context): File = File(ctx.filesDir, "components")
+    fun componentDir(ctx: Context, id: String): File = File(componentsRoot(ctx), id)
     fun obsiRoot(ctx: Context): File = File(ctx.filesDir, "obsi")
     fun wallpaperRoot(ctx: Context): File = File(obsiRoot(ctx), "wallpapers")
     fun customWallpaper(ctx: Context): File = File(obsiRoot(ctx), "custom-bg")
+    /** game session log (latestlog.txt written by the vendored stdio_is) */
+    fun gameLog(ctx: Context): File = File(obsiRoot(ctx), "latestlog.txt")
+    /** persisted game-exit marker consumed by the shell after the restart */
+    fun exitMarker(ctx: Context): File = File(obsiRoot(ctx), "exit-marker.txt")
+    /** runtime root alias used by the JRE component code */
+    fun runtimeRootForJre(ctx: Context): File = runtimeRoot(ctx)
 }
 
 enum class ThemeMode { MINECRAFT, DYNAMIC, OBSIDIAN, VANILLA, WHITE }

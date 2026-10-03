@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +36,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -43,6 +47,7 @@ import studio.obsifox.obsilauncher.ui.screens.AboutScreen
 import studio.obsifox.obsilauncher.ui.screens.AccountsScreen
 import studio.obsifox.obsilauncher.ui.screens.BrowseScreen
 import studio.obsifox.obsilauncher.ui.screens.ConsoleScreen
+import studio.obsifox.obsilauncher.ui.screens.GameScreen
 import studio.obsifox.obsilauncher.ui.screens.HomeScreen
 import studio.obsifox.obsilauncher.ui.screens.InstanceDetailScreen
 import studio.obsifox.obsilauncher.ui.screens.SettingsScreen
@@ -70,16 +75,14 @@ val TopBarSpace = 68.dp
  * automatic launch after a download finishes. Refreshes Microsoft tokens
  * when they are close to expiry, then spawns the game and reports back.
  *
- * v1.12.0 — PRE-FLIGHT. Pressing PLAY used to crash straight into the game
- * dying because neither the version files nor the runtime/JVM were verified
- * first. Now, in order:
- *  1. the selected version is installed if its files are not on disk
- *     (the installer re-verifies every sha1 as it downloads);
- *  2. the runtime pack is deep-checked — a pack that lost its libjvm.so is
- *     treated as missing and the default pack is downloaded automatically
- *     (the same auto-provisioning the update gate uses);
- *  3. only a fully provisioned device reaches the fork/exec.
- * The big home button shows live progress for both stages.
+ * v1.12.0 — PRE-FLIGHT: version files install + sha1 verify before spawn.
+ *
+ * v1.13.0 — the runtime check finally talks to the SAME system that boots
+ * the JVM: ObsiComponents (the Internal-* JREs). The old pre-flight verified
+ * RuntimePacks (pack.json/launcher.so) while beginGame() booted an
+ * ObsiComponents runtime — two disconnected stores, so a "verified" device
+ * could still fail to open the JVM. Also: the missing GameManager.launch()
+ * glue finally exists, so PLAY actually reaches JLI_Launch now.
  */
 internal suspend fun launchGame(
     context: android.content.Context,
@@ -101,14 +104,22 @@ internal suspend fun launchGame(
         }
     }
 
-    // ---- 2) runtime / JVM ---------------------------------------------------
-    var pack = app.runtimePacks.packs.value.firstOrNull { it.isComplete() }
-    if (pack == null) {
-        // missing or broken (e.g. libjvm.so gone) — download a default pack
-        app.updateGate.checkRuntime()
-        pack = app.runtimePacks.packs.value.firstOrNull { it.isComplete() }
-        if (pack == null) return // runtime failed — the gate/settings show it
+    // ---- 2) runtime / JVM (ObsiComponents — the boot path's own store) ------
+    val major = studio.obsifox.obsilauncher.core.game.LaunchPipeline.javaMajor(context, instance.versionId)
+    var runtimeName = studio.obsifox.obsilauncher.core.runtime.ObsiComponents.installedRuntimeName(context, major)
+    if (runtimeName == null) {
+        // nothing usable — unpack the bundled Internal-21 (zero-touch), then
+        // try to fetch the version's own runtime when one is published
+        studio.obsifox.obsilauncher.core.runtime.ObsiComponents.ensureBundledRuntime(context)
+        runtimeName = studio.obsifox.obsilauncher.core.runtime.ObsiComponents.installedRuntimeName(context, major)
+        if (runtimeName == null) {
+            val wanted = DOWNLOADABLE_MAJOR[major] ?: "jre-21"
+            if (studio.obsifox.obsilauncher.core.runtime.ObsiComponents.downloadRuntime(context, wanted)) {
+                runtimeName = studio.obsifox.obsilauncher.core.runtime.ObsiComponents.installedRuntimeName(context, major)
+            }
+        }
     }
+    if (runtimeName == null) return // no JVM on disk and none could be fetched
 
     // ---- 3) account + spawn -------------------------------------------------
     var account = app.accounts.active()
@@ -129,10 +140,14 @@ internal suspend fun launchGame(
         }
     }
     if (account != null) {
-        app.gameManager.launch(context, instance, account, pack)
-        onStarted()
+        if (app.gameManager.launch(context, instance, account, runtimeName)) {
+            onStarted()
+        }
     }
 }
+
+/** Internal-* runtime to fetch for a Minecraft java requirement (best effort). */
+private val DOWNLOADABLE_MAJOR = mapOf(8 to "jre-8", 17 to "jre-17", 25 to "jre-25")
 
 /** v1.9.0 — downloads the version that is currently selected in settings (vanilla). */
 internal suspend fun startSelectedDownload(app: studio.obsifox.obsilauncher.App) {
@@ -150,6 +165,7 @@ sealed class Overlay {
     data object None : Overlay()
     data object Console : Overlay()
     data object InstanceDetail : Overlay()
+    data object Game : Overlay()
 }
 
 @Composable
@@ -199,7 +215,7 @@ fun ObsiApp() {
                 ?: app.instances.create(done.id, done.id, done.id)
             app.instances.setActive(instance.id)
             app.settings.selectedVersionValue = instance.versionId
-            launchGame(context, app) { overlay = Overlay.Console }
+            launchGame(context, app) { overlay = Overlay.Game }
         }
     }
 
@@ -217,6 +233,17 @@ fun ObsiApp() {
         return
     }
 
+    // v1.13.0 — crash reporting: after the process restart that follows a game
+    // exit, the persisted marker becomes the "Game Crashed" dialog; a boot
+    // failure reaches us live through the same flow.
+    val crashExit by studio.obsifox.obsilauncher.core.game.ObsiGameExit.lastExit.collectAsState()
+    LaunchedEffect(Unit) {
+        val marker = studio.obsifox.obsilauncher.core.game.ObsiGameExit.consumeMarker(context)
+        if (marker != null && marker.code != 0) {
+            studio.obsifox.obsilauncher.core.game.ObsiGameExit.post(marker)
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         // screen content -------------------------------------------------------
         val contentModifier = if (overlay == Overlay.None && screen != Screen.HOME) {
@@ -228,11 +255,12 @@ fun ObsiApp() {
             when (overlay) {
                 Overlay.Console -> ConsoleScreen(onClose = { overlay = Overlay.None })
                 Overlay.InstanceDetail -> InstanceDetailScreen(onClose = { overlay = Overlay.None })
+                Overlay.Game -> GameScreen(onExitRequest = { overlay = Overlay.None })
                 Overlay.None -> when (screen) {
                     Screen.HOME -> HomeScreen(
                         onPlay = {
                             scope.launch {
-                                launchGame(context, app) { overlay = Overlay.Console }
+                                launchGame(context, app) { overlay = Overlay.Game }
                             }
                         },
                         onDownload = {
@@ -267,6 +295,12 @@ fun ObsiApp() {
                 onAbout = { screen = Screen.ABOUT },
             )
         }
+    }
+
+    // v1.13.0 — the user's reference crash report: title, the extracted error
+    // in a scrollable box, Copy Exit Code and Close.
+    crashExit?.let { exit ->
+        CrashDialog(exit = exit, onDismiss = { studio.obsifox.obsilauncher.core.game.ObsiGameExit.dismiss() })
     }
 }
 
@@ -361,5 +395,94 @@ private fun TopTab(label: String, selected: Boolean, onClick: () -> Unit) {
                     )
                 }
             },
+    )
+}
+
+/**
+ * v1.13.0 — the game crash report, styled after the user's reference mock:
+ * a dark panel, the crash headline in red, the extracted error in a
+ * monospace scroll area and two actions — Copy Exit Code and Close.
+ */
+@Composable
+private fun CrashDialog(
+    exit: studio.obsifox.obsilauncher.core.game.ObsiGameExit.Exit,
+    onDismiss: () -> Unit,
+) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val label = stringResource(R.string.crash_title)
+    val copiedLabel = stringResource(R.string.crash_copied)
+    var copied by remember { mutableStateOf(false) }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFE5604C),
+            )
+        },
+        text = {
+            Column {
+                if (exit.versionId != null) {
+                    Text(
+                        text = exit.versionId + "  ·  " +
+                            stringResource(R.string.crash_exit_code, exit.code),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFFB9AFA6),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x3314000000)),
+                ) {
+                    Text(
+                        text = exit.excerpt.ifBlank { stringResource(R.string.crash_empty) },
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color(0xFFE8E2DB),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(10.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Text(
+                text = if (copied) copiedLabel else stringResource(R.string.crash_copy_code),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF7ED957),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        clipboard.setText(
+                            androidx.compose.ui.text.AnnotatedString("Exit code: ${exit.code}"),
+                        )
+                        copied = true
+                    }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        },
+        dismissButton = {
+            Text(
+                text = stringResource(R.string.crash_close),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFB9AFA6),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onDismiss)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        },
+        containerColor = Color(0xFF201A17),
     )
 }

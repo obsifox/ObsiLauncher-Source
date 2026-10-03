@@ -1,23 +1,31 @@
 package studio.obsifox.obsilauncher.core.game
 
 import android.content.Context
+import android.os.Process
+import android.view.Surface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import net.kdt.pojavlaunch.Architecture
+import net.kdt.pojavlaunch.Logger
+import net.kdt.pojavlaunch.utils.JREUtils
+import studio.obsifox.obsilauncher.App
 import studio.obsifox.obsilauncher.core.ObsiSettings
 import studio.obsifox.obsilauncher.core.Paths
 import studio.obsifox.obsilauncher.core.accounts.Account
 import studio.obsifox.obsilauncher.core.cosmetics.SkinManager
 import studio.obsifox.obsilauncher.core.instance.Instance
-import studio.obsifox.obsilauncher.core.jni.ObsiBridge
-import studio.obsifox.obsilauncher.core.runtime.Pack
+import studio.obsifox.obsilauncher.core.runtime.ObsiComponents
 import java.io.File
-import java.io.FileInputStream
 
 enum class GameState { NOT_RUNNING, PREPARING, RUNNING, EXITED }
 
-/** Owns the single running game process and its console log. */
+/**
+ * Owns the in-process game JVM session (ZalithLauncher/PojavLauncher model):
+ * the JVM is booted on a dedicated thread via JLI_Launch, renders into the
+ * game SurfaceView and its stdout/stderr are piped through the vendored
+ * stdio_is into [Logger] → the launcher console.
+ */
 class GameManager(private val settings: ObsiSettings) {
 
     /** playtime hooks so the home screen can show play-time / last-played. */
@@ -28,7 +36,7 @@ class GameManager(private val settings: ObsiSettings) {
 
     var sessionEvents: SessionEvents? = null
 
-    data class Running(val instanceId: String, val versionId: String, val pid: Int)
+    data class Running(val instanceId: String, val versionId: String)
 
     val state = MutableStateFlow(GameState.NOT_RUNNING)
     val running = MutableStateFlow<Running?>(null)
@@ -36,95 +44,209 @@ class GameManager(private val settings: ObsiSettings) {
     val log = MutableStateFlow("")
 
     @Volatile
-    private var logThreadActive = false
+    private var startedAt = 0L
+    @Volatile
+    private var activeInstance: Instance? = null
 
-    fun launch(context: Context, instance: Instance, account: Account, pack: Pack) {
-        if (state.value == GameState.RUNNING || state.value == GameState.PREPARING) return
+    companion object {
+        @Volatile
+        var lastInstanceId: String? = null
+        @Volatile
+        var lastVersionId: String? = null
+
+        fun loadLibraries() {
+            System.loadLibrary("pojavexec")
+            System.loadLibrary("pojavexec_awt")
+            System.loadLibrary("exithook")
+        }
+    }
+
+    init {
+        loadLibraries()
+    }
+
+    /**
+     * Step 0 (v1.13.0): the shell's PLAY entry point — stores the account and
+     * the runtime the pre-flight picked, validates the session and returns.
+     * The UI then switches to the game screen whose SurfaceView hands its
+     * Surface to [beginGame]. (The old fork/exec launch died before the JVM
+     * ever opened — the ZalithLauncher in-process JLI_Launch model replaced it.)
+     */
+    fun launch(context: Context, instance: Instance, account: Account, runtimeName: String): Boolean {
+        sessionAccount = account
+        sessionRuntime = runtimeName
+        return prepare(context, instance)
+    }
+
+    /**
+     * Step 1: called from the shell when PLAY is pressed — validates and
+     * switches the UI to the game screen (surface creation is next).
+     */
+    fun prepare(context: Context, instance: Instance): Boolean {
+        if (state.value == GameState.RUNNING || state.value == GameState.PREPARING) return false
         state.value = GameState.PREPARING
         exitCode.value = null
         log.value = ""
-        var startedAt = 0L
+        activeInstance = instance
+        lastInstanceId = instance.id
+        lastVersionId = instance.versionId
+        return true
+    }
+
+    /**
+     * Step 2: called by the game surface when its Surface is ready.
+     * Boots the in-process JVM (blocks the calling thread until the game exits
+     * or the exit hook restarts the process).
+     */
+    fun beginGame(context: Context, surface: Surface) {
+        // guard: only the first surface after a prepare() may boot the JVM
+        if (state.value != GameState.PREPARING) return
+        val instance = activeInstance ?: run {
+            state.value = GameState.NOT_RUNNING
+            return
+        }
+        val app = context.applicationContext
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
+                // game log: latestlog.txt + console listener (vendored stdio_is)
+                Paths.gameLog(app).delete()
+                Logger.begin(Paths.gameLog(app).absolutePath)
+                Logger.setLogListener { text -> appendLog(text + "\n") }
+
+                val account = sessionAccount ?: throw IllegalStateException("no account")
+                val runtimeName = sessionRuntime
+                    ?: ObsiComponents.installedRuntimeName(app, LaunchPipeline.javaMajor(app, instance.versionId))
+                    ?: throw IllegalStateException("no Java runtime installed")
+
                 // local-only custom skin/cape goes into the game dir before start
-                val gameDir = Paths.versionDir(context, instance.versionId)
-                val skinWarning = SkinManager.applyToGameDir(context, account, gameDir)
+                val gameDir = Paths.versionDir(app, instance.versionId)
+                val skinWarning = SkinManager.applyToGameDir(app, account, gameDir)
                 skinWarning?.let { appendLog("!! ObsiLauncher: $it\n") }
 
-                val jvmArgs = instance.javaArgs.ifEmpty { settings.javaArgsValue }
+                appendLog("--------- ObsiLauncher ${studio.obsifox.obsilauncher.BuildConfig.VERSION_NAME} ---------\n")
+                appendLog("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (API ${android.os.Build.VERSION.SDK_INT})\n")
+                appendLog("Arch: ${Architecture.archAsString(0)} — runtime: $runtimeName\n")
+                appendLog("Version: ${instance.versionId}\n")
+
+                val jreHome = ObsiComponents.runtimeHome(app, runtimeName).absolutePath
+
+                // ---- env (Zalith setEnv) ----
+                LaunchPipeline.env(app, LaunchPipeline.Request(
+                    instance = instance,
+                    account = account,
+                    runtimeName = runtimeName,
+                    memoryMb = instance.memoryMb.takeIf { it > 0 } ?: settings.memoryMbValue,
+                    extraJvmArgs = instance.javaArgs.ifEmpty { settings.javaArgsValue }.split(" ").map { it.trim() }.filter { it.isNotEmpty() },
+                ), jreHome).forEach { kv ->
+                    val i = kv.indexOf('=')
+                    runCatching {
+                        android.system.Os.setenv(kv.substring(0, i), kv.substring(i + 1), true)
+                    }
+                }
+
+                // ---- LD_LIBRARY_PATH + dlopen the JVM ----
+                // Zalith relocateLibPath order: jli FIRST, then the JRE lib
+                // dir, then the system/vendor dirs, our own libs last.
+                val dirnameJre = LaunchPipeline.ToolsHome.dirNameHomeJre(jreHome)
+                net.kdt.pojavlaunch.Tools.DIRNAME_HOME_JRE = dirnameJre // locateLibs must scan the SAME dir
+                val server = File(jreHome, "$dirnameJre/server/libjvm.so")
+                JREUtils.jvmLibraryPath = jreHome + "/" + dirnameJre + "/" + if (server.exists()) "server" else "client"
+                JREUtils.setLdLibPath(
+                    jreHome + "/" + dirnameJre + "/jli:" +
+                        JREUtils.jvmLibraryPath + ":" +
+                        jreHome + "/" + dirnameJre + ":" +
+                        "/system/lib64:/vendor/lib64:/vendor/lib64/hw:" +
+                        LaunchPipeline.appNativeDir(app)
+                )
+                // freetype alias: some JRE builds ship libfreetype.so.6 only
+                runCatching {
+                    val libDir = File(jreHome, dirnameJre)
+                    val dot6 = File(libDir, "libfreetype.so.6")
+                    if (dot6.isFile && !File(libDir, "libfreetype.so").isFile) {
+                        dot6.renameTo(File(libDir, "libfreetype.so"))
+                    }
+                }
+                JREUtils.initJavaRuntime(jreHome)
+
+                // renderer + openal (GL4ES from our own libs)
+                JREUtils.dlopen(JREUtils.findInLdLibPath("libopenal.so"))
+                JREUtils.dlopen(JREUtils.findInLdLibPath("libgl4es_114.so"))
+
+                // exit plumbing: hook exit() so a dead game returns to the shell
+                JREUtils.setupExitMethod(app)
+                JREUtils.initializeGameExitHook()
+
+                // surface → native bridge
+                JREUtils.setupBridgeWindow(surface)
+
+                val gameDirReal = File(gameDir, "game").takeIf { it.isDirectory } ?: gameDir
+                JREUtils.chdir(gameDirReal.absolutePath)
+
                 val req = LaunchPipeline.Request(
                     instance = instance,
                     account = account,
-                    pack = pack,
+                    runtimeName = runtimeName,
                     memoryMb = instance.memoryMb.takeIf { it > 0 } ?: settings.memoryMbValue,
-                    extraJvmArgs = jvmArgs.split(" ").map { it.trim() }.filter { it.isNotEmpty() },
+                    extraJvmArgs = instance.javaArgs.ifEmpty { settings.javaArgsValue }.split(" ").map { it.trim() }.filter { it.isNotEmpty() },
                 )
-                ObsiBridge.chdir(gameDir.absolutePath)
-                val pid = LaunchPipeline.spawn(context, req)
-                if (pid <= 0) {
-                    state.value = GameState.EXITED
-                    exitCode.value = -1
-                    appendLog("!! ObsiLauncher: fork/exec failed — check the runtime pack (${pack.launcherSo.path})\n")
-                    return@launch
-                }
-                running.value = Running(instance.id, instance.versionId, pid)
+                val args = LaunchPipeline.argv(app, req).toMutableList()
+                args.add(0, "java")
+
+                appendLog("Booting the game JVM in-process (runtime $runtimeName)…\n")
                 state.value = GameState.RUNNING
+                running.value = Running(instance.id, instance.versionId)
                 startedAt = System.currentTimeMillis()
                 sessionEvents?.onSessionStart(instance.id)
-                startLogReader()
-                val code = ObsiBridge.waitPid(pid)
+
+                // native logcat tags the vendored stdio_is/egl bridge print on
+                // (Zalith parity: without these, native-side failures are invisible)
+                JREUtils.startLogcatReader(arrayOf("jrelog", "LIBGL", "NativeInput", "pojavexec")) { line ->
+                    appendLog(line)
+                }
+
+                val code = com.oracle.dalvik.VMLauncher.launchJVM(args.toTypedArray())
+                appendLog("\nJava exit code: $code\n")
                 sessionEvents?.onSessionEnd(instance.id, (System.currentTimeMillis() - startedAt) / 1000)
                 exitCode.value = code
                 state.value = GameState.EXITED
                 running.value = null
-            } catch (e: Exception) {
+                ObsiGameExit.onGameExit(app, code, false)
+                // nominal_exit normally restarts the process before we get here;
+                // if the JVM returned cleanly we restart manually for a clean shell
+                Process.killProcess(Process.myPid())
+            } catch (e: Throwable) {
+                appendLog("!! ObsiLauncher launch error: ${e.message}\n")
+                e.printStackTrace()
                 if (startedAt > 0) {
                     sessionEvents?.onSessionEnd(instance.id, (System.currentTimeMillis() - startedAt) / 1000)
                 }
-                appendLog("!! ${e.message}\n")
                 state.value = GameState.EXITED
                 exitCode.value = -1
                 running.value = null
+                // v1.13.0 — a boot failure is a crash too: persist the marker and
+                // surface the crash dialog (the game JVM itself never opened)
+                ObsiGameExit.onGameExit(app, -1, false)
             }
         }
     }
 
-    fun stop() {
-        val pid = running.value?.pid ?: return
-        ObsiBridge.kill(pid)
-    }
+    /** The account/runtime handed over by the shell before the UI switch. */
+    @Volatile
+    var sessionAccount: Account? = null
+    @Volatile
+    var sessionRuntime: String? = null
 
-    private fun startLogReader() {
-        if (logThreadActive) return
-        logThreadActive = true
-        Thread({
-            val fd = ObsiBridge.takeLogFd()
-            if (fd < 0) {
-                logThreadActive = false
-                return@Thread
-            }
-            try {
-                // take ownership of the raw pipe fd and read the game log from it
-                android.os.ParcelFileDescriptor.adoptFd(fd).use { pfd ->
-                    FileInputStream(pfd.fileDescriptor).use { input ->
-                        val buf = ByteArray(8 * 1024)
-                        while (true) {
-                            val n = input.read(buf)
-                            if (n < 0) break
-                            if (n > 0) appendLog(String(buf, 0, n))
-                        }
-                    }
-                }
-            } catch (_: Exception) {
-            } finally {
-                logThreadActive = false
-            }
-        }, "obsi-log-reader").start()
+    /** User pressed "stop": persist a neutral marker and kill the process. */
+    fun stop(context: Context) {
+        if (state.value != GameState.RUNNING && state.value != GameState.PREPARING) return
+        runCatching {
+            Paths.exitMarker(context).writeText("0|0|${lastInstanceId ?: ""}|${lastVersionId ?: ""}\n")
+        }
+        Process.killProcess(Process.myPid())
     }
 
     private fun appendLog(text: String) {
-        val current = log.value
-        val next = (current + text)
+        val next = log.value + text
         log.value = if (next.length > 300_000) next.substring(next.length - 300_000) else next
     }
 }

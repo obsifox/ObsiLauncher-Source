@@ -438,12 +438,13 @@ private const val VIDEO_FADE_MS = 1_200L
 /**
  * The background cycle, exactly as briefed:
  * the version wallpaper holds the screen -> the bundled video plays ONCE,
- * fading into the wallpaper across its last second -> 45 s rest -> the video
+ * fading into the wallpaper across its last second -> 10 s rest -> the video
  * starts AGAIN FROM ZERO. Endless loop, zero downloads.
  *
  * v1.12.0 — switching versions lands DIRECTLY on that version's photo and
  * restarts the schedule from there ([versionKey]); every replay begins at
  * 0:00, never mid-way.
+ * v1.13.0 — the rest window between two trailer passes is 10 s (was 45 s).
  */
 @Composable
 private fun VideoCycleLayer(
@@ -489,7 +490,7 @@ private fun VideoCycleLayer(
         VideoPhase.RESTING -> {
             RestArtwork(restImagePath, restResId, modifier)
             LaunchedEffect(cycle) {
-                delay(45_000L)
+                delay(10_000L) // v1.13.0 — the trailer replays after 10 s
                 cycle += 1
                 phase = VideoPhase.PLAYING
             }
@@ -519,8 +520,8 @@ private fun RestArtwork(imagePath: String?, resId: Int?, modifier: Modifier = Mo
 
 /**
  * One pass of the bundled trailer on a SurfaceView. Not self-looping —
- * completion hands over to the 45 s wallpaper rest. Sound follows the
- * user's mute choice and playback pauses with the app lifecycle.
+ * completion hands over to the wallpaper rest (10 s since v1.13.0). Sound
+ * follows the user's mute choice and playback pauses with the app lifecycle.
  * v1.12.0 — [onRemaining] reports the ms left, powering the slow
  * wallpaper crossfade over the final second; every pass starts at 0:00.
  */

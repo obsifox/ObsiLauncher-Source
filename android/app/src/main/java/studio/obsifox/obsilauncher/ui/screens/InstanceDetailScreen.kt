@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -171,6 +172,44 @@ private fun ContentManagerPane(versionId: String) {
                     tick++
                 }
             })
+            Spacer(Modifier.width(10.dp))
+            // v1.13.0 — import mod files already on the device (.jar/.zip):
+            // the "mods never show" reports were users with downloaded jars and
+            // no way to move them into the instance from the launcher
+            val import = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+            ) { uri ->
+                if (uri != null) {
+                    scope.launch {
+                        message = runCatching {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                val dir = app.modrinth.content.folderFor(versionId, ProjectKind.MOD)
+                                dir.mkdirs()
+                                val name = queryDisplayName(context, uri)
+                                    ?: "imported-${System.currentTimeMillis()}.jar"
+                                val dest = java.io.File(dir, name)
+                                context.contentResolver.openInputStream(uri)!!.use { input ->
+                                    dest.outputStream().use { input.copyTo(it) }
+                                }
+                                context.getString(R.string.content_imported, name)
+                            }
+                        }.getOrElse { it.message ?: "error" }
+                        tick++
+                    }
+                }
+            }
+            ObsiGhostButton(stringResourceCompat(R.string.content_import), onClick = {
+                import.launch("*/*")
+            })
+        }
+
+        // v1.13.0 — the list re-scans every 2 s while this pane is visible:
+        // files added from outside (file manager, import above) appear live
+        androidx.compose.runtime.LaunchedEffect(kind) {
+            while (true) {
+                kotlinx.coroutines.delay(2_000)
+                tick++
+            }
         }
 
         message?.let {
@@ -234,6 +273,15 @@ private fun ContentManagerPane(versionId: String) {
 private fun ContentFile.lockedInfo(): String {
     val e = entry ?: return fileName
     return "$kind · ${e.versionNumber} · project ${e.projectId.take(8)}"
+}
+
+/** display name of a content:// uri (OpenableColumns.DISPLAY_NAME) */
+private fun queryDisplayName(context: android.content.Context, uri: android.net.Uri): String? {
+    return runCatching {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    }.getOrNull()
 }
 
 @Composable

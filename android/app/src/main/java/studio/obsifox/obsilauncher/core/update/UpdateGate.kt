@@ -71,25 +71,27 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
     /** ---- 2. runtime / JVM ------------------------------------------------ */
     suspend fun checkRuntime() = withContext(Dispatchers.IO) {
         step.value = Step.CheckingRuntime
-        runtimePacks.rescan()
-        // v1.12.0: isComplete() — a pack that lost its libjvm.so must be
-        // re-downloaded, not trusted (it used to crash the game on PLAY)
-        val valid = runtimePacks.packs.value.any { it.isComplete() }
-        if (valid) {
+
+        // v1.13.0 — the gate now verifies the SAME store the game boots from:
+        // ObsiComponents' Internal-* JREs (the old check validated the separate
+        // RuntimePacks store the JVM never reads — the reported "JVM won't
+        // open" stemmed from exactly this split).
+        runtimePacks.rescan() // keep the advanced pack shelf in sync (settings)
+        studio.obsifox.obsilauncher.core.runtime.ObsiComponents.ensureBundledRuntime(context)
+        if (studio.obsifox.obsilauncher.core.runtime.ObsiComponents
+                .installedRuntimeName(context, 21) != null
+        ) {
             step.value = Step.Ready
             return@withContext
         }
 
         // ---- auto-provision, no questions asked ----------------------------
-        // the app carries its own download links (v1.9.0): the gate resolves
-        // them itself — the user NEVER downloads a JVM/runtime by hand.
+        // the bundled Internal-21 failed to unpack — try the catalog runtimes
         var lastError: Exception? = null
-        for (url in resolveRuntimeUrls()) {
+        for (id in listOf("jre-21", "jre-17", "jre-25")) {
             try {
                 step.value = Step.InstallingRuntime(null)
-                runtimePacks.installAuto(url, RuntimePacks.nameFor(url))
-                runtimePacks.rescan()
-                if (runtimePacks.packs.value.any { it.isComplete() }) {
+                if (studio.obsifox.obsilauncher.core.runtime.ObsiComponents.downloadRuntime(context, id)) {
                     step.value = Step.Ready
                     return@withContext
                 }

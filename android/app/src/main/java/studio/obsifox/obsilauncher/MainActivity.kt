@@ -71,15 +71,20 @@ class MainActivity : ComponentActivity() {
                 // light darkening veil — v1.9.0 design decision
                 ObsiWallpaperLayer(wallpaper = app.wallpaper, blurPx = 0, modifier = Modifier.fillMaxSize())
                 ObsiTheme(mode = themeMode, dynamicAccent = androidx.compose.ui.graphics.Color(accent)) {
-                    ObsiApp()
+                    // v1.13.0 — the shell sits inside the live language wrapper:
+                    // switching system/fa/en re-resolves every string in place,
+                    // no Activity recreation
+                    studio.obsifox.obsilauncher.ui.ObsiLanguage {
+                        ObsiApp()
+                    }
                 }
             }
         }
     }
 
     override fun onDestroy() {
-        // the game is a child process; stop it with the launcher
-        (application as App).gameManager.stop()
+        // the game runs in-process; a session alive at destroy time must stop
+        (application as App).gameManager.stop(this)
         super.onDestroy()
     }
 }

@@ -1,6 +1,7 @@
 package studio.obsifox.obsilauncher
 
 import android.app.Application
+import kotlinx.coroutines.launch
 import studio.obsifox.obsilauncher.core.ObsiSettings
 import studio.obsifox.obsilauncher.core.accounts.AccountStore
 import studio.obsifox.obsilauncher.core.auth.MicrosoftAuth
@@ -69,6 +70,14 @@ class App : Application() {
         modrinth = ModrinthInstaller(this)
         microsoft = MicrosoftAuth()
         updateGate = UpdateGate(this, runtimePacks)
+
+        // v1.13.0 — unpack the bundled components + the Internal-21 JRE in the
+        // background, BEFORE any PLAY can ask for them (they never had a call
+        // site, so a fresh install had no runtime at all)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            studio.obsifox.obsilauncher.core.runtime.ObsiComponents.ensureBundled(this@App)
+            studio.obsifox.obsilauncher.core.runtime.ObsiComponents.ensureBundledRuntime(this@App)
+        }
     }
 }
 

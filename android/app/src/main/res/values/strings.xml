@@ -273,4 +273,23 @@
     <string name="instances_rename_title">Custom name</string>
     <string name="instances_rename_save">Save</string>
     <string name="settings_theme_minecraft">Minecraft (official launcher look)</string>
+    <string name="set_tab_components">Components</string>
+    <string name="components_hint">Every runtime and file the launcher can use. Downloads take effect the next time the game starts. LWJGL 3.3.6 is the Android fork covering the 3.3.3 / 3.4.x game requirements.</string>
+    <string name="components_installed">Installed</string>
+    <string name="components_downloading">Downloading…</string>
+    <string name="components_runtime_missing">Not installed — download to use</string>
+    <string name="components_delete">Delete</string>
+    <string name="components_download">Download</string>
+    <string name="components_pack_hint">Advanced: install a custom runtime pack (.tar.xz) by URL.</string>
+    <string name="game_booting">Booting the game…</string>
+    <string name="game_running">Game running</string>
+    <string name="game_log">Log</string>
+    <string name="crash_title">Game Crashed</string>
+    <string name="crash_exit_code">exit code %d</string>
+    <string name="crash_copy_code">Copy Exit Code</string>
+    <string name="crash_copied">Copied!</string>
+    <string name="crash_close">Close</string>
+    <string name="crash_empty">No error details were captured.</string>
+    <string name="content_import">Import from device</string>
+    <string name="content_imported">Imported: %s</string>
 </resources>

@@ -49,7 +49,7 @@ import studio.obsifox.obsilauncher.ui.components.ObsiTextButton
 import studio.obsifox.obsilauncher.ui.components.ProgressRow
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
-private val SettingsTabs = listOf("general", "game", "look")
+private val SettingsTabs = listOf("general", "game", "components", "look")
 
 /**
  * Settings as the reference design: a left rail of section pills and one
@@ -79,6 +79,7 @@ fun SettingsScreen() {
                         when (key) {
                             "general" -> R.string.set_tab_general
                             "game" -> R.string.set_tab_game
+                            "components" -> R.string.set_tab_components
                             else -> R.string.set_tab_look
                         },
                     ),
@@ -115,6 +116,7 @@ fun SettingsScreen() {
             when (tab) {
                 0 -> GeneralPanel()
                 1 -> GamePanel()
+                2 -> ComponentsPanel()
                 else -> LookPanel()
             }
         }
@@ -189,9 +191,11 @@ private fun GeneralPanel() {
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (selected) obsi.accent else Color(0x2AFFFFFF))
                         .clickable {
+                            // v1.13.0 — NO Activity.recreate() here: the
+                            // ObsiLanguage wrapper re-resolves every string
+                            // live the moment the setting flips
                             if (language != code) {
                                 app.settings.languageValue = code
-                                (context as? android.app.Activity)?.recreate()
                             }
                         }
                         .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -454,4 +458,142 @@ private fun LookPanel() {
             )
         }
     }
+}
+
+// ----------------------------------------------------------------- components
+
+/**
+ * v1.13.0 — the FULL component/runtime shelf, as briefed: every runtime and
+ * file the launcher can use, visible and downloadable in one place.
+ *
+ *   Internal-8/17/21/25  the Java runtimes (MC ≤1.16 / 1.17+ / ≥1.20.5 / 25)
+ *   authlib-injector     external-auth injection runtime
+ *   caciocavallo (+17)   portable OpenJDK AWT backend (Java 8 / Java 17+)
+ *   JNA                  low-level system-call bridge (libjnidispatch)
+ *   Launcher Components  the launcher's own toolkit (Mio patcher, log4j…)
+ *   LWJGL 3              the graphics/OpenGL/input/audio fork (3.3.6 covers
+ *                        the old 3.3.3 and the newer 3.4.x requirements)
+ *
+ * Downloads unpack immediately and are picked up the NEXT time the game
+ * starts — the running JVM (or the next one) reads them at boot.
+ */
+@Composable
+private fun ComponentsPanel() {
+    val context = LocalContext.current
+    val app = context.app
+    val obsi = LocalObsi.current
+    val scope = rememberCoroutineScope()
+
+    var tick by remember { mutableIntStateOf(0) }
+    var busyName by remember { mutableStateOf<String?>(null) }
+    var progress by remember { mutableStateOf<Float?>(null) }
+
+    // live progress of ObsiComponents installs (gate / pre-flight share them)
+    val installing by studio.obsifox.obsilauncher.core.runtime.ObsiComponents.installing.collectAsState()
+    val installProgress by studio.obsifox.obsilauncher.core.runtime.ObsiComponents.progress.collectAsState()
+
+    val statuses = remember(tick, installing) {
+        studio.obsifox.obsilauncher.core.runtime.ObsiComponents.statuses(context)
+    }
+
+    PanelTitle(stringResourceCompat(R.string.set_tab_components))
+    Text(
+        stringResourceCompat(R.string.components_hint),
+        style = MaterialTheme.typography.labelMedium,
+        color = obsi.textDim,
+        modifier = Modifier.padding(bottom = 6.dp),
+    )
+
+    statuses.forEach { st ->
+        val c = st.component
+        SettingRow(
+            label = c.displayName,
+            hint = when {
+                st.busy -> stringResourceCompat(R.string.components_downloading)
+                st.installed -> stringResourceCompat(R.string.components_installed)
+                c.isRuntime -> stringResourceCompat(R.string.components_runtime_missing)
+                else -> null
+            },
+        ) {
+            Row {
+                when {
+                    st.busy || (installing != null && installing == c.displayName) -> {
+                        Text(
+                            "…",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = obsi.accent,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
+                    st.installed -> {
+                        Text(
+                            "●",
+                            color = Color(0xFF7ED957),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                        if (!c.bundled || c.isRuntime) {
+                            ObsiTextButton(stringResourceCompat(R.string.components_delete), onClick = {
+                                studio.obsifox.obsilauncher.core.runtime.ObsiComponents.remove(context, c.id)
+                                tick++
+                            })
+                        }
+                    }
+                    else -> {
+                        ObsiTextButton(stringResourceCompat(R.string.components_download), onClick = {
+                            scope.launch {
+                                busyName = c.displayName
+                                progress = null
+                                if (c.isRuntime) {
+                                    studio.obsifox.obsilauncher.core.runtime.ObsiComponents.downloadRuntime(context, c.id)
+                                } else {
+                                    // bundled-but-damaged component: re-unpack
+                                    studio.obsifox.obsilauncher.core.runtime.ObsiComponents.unpackBundled(context, c.id)
+                                }
+                                busyName = null
+                                tick++
+                            }
+                        })
+                    }
+                }
+            }
+        }
+        if (installing != null && installing == c.displayName && installProgress != null) {
+            ProgressRow(stringResourceCompat(R.string.components_downloading), installProgress)
+        }
+        PanelDivider()
+    }
+
+    // the manual RuntimePacks url-install stays available at the bottom
+    Text(
+        stringResourceCompat(R.string.components_pack_hint),
+        style = MaterialTheme.typography.labelMedium,
+        color = obsi.textDim,
+        modifier = Modifier.padding(top = 8.dp, bottom = 6.dp),
+    )
+    var packUrl by remember { mutableStateOf("") }
+    OutlinedTextField(
+        value = packUrl,
+        onValueChange = { packUrl = it },
+        label = { Text(stringResourceCompat(R.string.settings_runtime_url)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    ObsiButton(
+        text = stringResourceCompat(R.string.settings_runtime_install),
+        onClick = {
+            val url = packUrl.trim()
+            if (url.isNotEmpty()) {
+                scope.launch {
+                    try {
+                        app.runtimePacks.install(url, studio.obsifox.obsilauncher.core.runtime.RuntimePacks.nameFor(url))
+                        tick++
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        },
+        enabled = packUrl.isNotBlank(),
+        modifier = Modifier.padding(top = 8.dp),
+    )
 }

@@ -26,6 +26,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,8 +75,6 @@ fun HomeScreen(
     val activeId by app.instances.activeId.collectAsState()
     val accounts by app.accounts.accounts.collectAsState()
     val activeAccountId by app.accounts.activeId.collectAsState()
-    val packs by app.runtimePacks.packs.collectAsState()
-    val runtimePack by app.settings.runtimePack.collectAsState()
     val gameState by app.gameManager.state.collectAsState()
     val installing by app.installer.state.collectAsState()
     val loaderInstalling by app.loaders.state.collectAsState()
@@ -83,7 +84,23 @@ fun HomeScreen(
 
     val active = instances.firstOrNull { it.id == activeId }
     val account = accounts.firstOrNull { it.id == activeAccountId }
-    val pack = packs.firstOrNull { it.name == runtimePack } ?: packs.firstOrNull()
+    // v1.13.0 — runtime readiness is read from the SAME store that boots the
+    // JVM (ObsiComponents/Internal-*), not from the disconnected pack store
+    val major = active?.versionId?.let {
+        studio.obsifox.obsilauncher.core.game.LaunchPipeline.javaMajor(context, it)
+    } ?: 21
+    var runtimeName by remember(active?.versionId) {
+        mutableStateOf(studio.obsifox.obsilauncher.core.runtime.ObsiComponents.installedRuntimeName(context, major))
+    }
+    // refresh after the gate / pre-flight installs one (components unpack in bg)
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2_000)
+        if (runtimeName == null) {
+            studio.obsifox.obsilauncher.core.runtime.ObsiComponents.ensureBundledRuntime(context)
+            runtimeName = studio.obsifox.obsilauncher.core.runtime.ObsiComponents.installedRuntimeName(context, major)
+        }
+    }
+    val runtimeReady = runtimeName != null
     val hasVersion = active != null && app.installer.isInstalled(active.versionId)
 
     // ---- the big button's three states (v1.12.0, the user's PNG palette) ---
@@ -105,7 +122,6 @@ fun HomeScreen(
     }
     // v1.12.0 — the runtime must be COMPLETE (libjvm.so really there), not just
     // "a folder exists", or the game dies the moment it is spawned
-    val runtimeReady = pack?.isComplete() == true
     val busy = gameState == GameState.RUNNING || gameState == GameState.PREPARING || downloadProgress != null
     val canDownload = !busy &&
         ((selectedVersion.isNotBlank() && !hasVersion) || !runtimeReady)

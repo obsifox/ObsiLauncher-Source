@@ -56,7 +56,7 @@ fun ConsoleScreen(onClose: () -> Unit = {}) {
                 if (state == GameState.RUNNING || state == GameState.PREPARING) {
                     ObsiButton(
                         text = stringResourceCompat(R.string.console_stop),
-                        onClick = { app.gameManager.stop() },
+                        onClick = { app.gameManager.stop(context) },
                         danger = true,
                     )
                 }

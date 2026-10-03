@@ -2,8 +2,8 @@ import java.util.Properties
 import com.android.build.api.variant.impl.VariantOutputImpl
 
 // ObsiLauncher release identity (bump here and in defaultConfig)
-val APP_VERSION_NAME = "1.12.0"
-val APP_VERSION_CODE = 11200
+val APP_VERSION_NAME = "1.13.0"
+val APP_VERSION_CODE = 11300
 
 plugins {
     alias(libs.plugins.android.application)
@@ -95,6 +95,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        prefab = true
     }
 }
 
@@ -110,6 +111,8 @@ androidComponents {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // exit() interception for the in-process game JVM (Pojav/Zalith exithook)
+    implementation("com.bytedance:bytehook:1.0.10")
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(platform(libs.compose.bom))
