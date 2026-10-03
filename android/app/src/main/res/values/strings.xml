@@ -253,4 +253,17 @@
     <string name="browse_search_any">Any</string>
     <string name="browse_search_name">Name (optional)</string>
     <string name="browse_search_name_hint">Leave empty to list top content</string>
+
+    <!-- 1.8.0 gate + parent versions + redesign -->
+    <string name="gate_skip">SKIP</string>
+    <string name="parent_pick_title">Versions in %1$s</string>
+    <string name="browse_pick_hint">Pick a category above · or drag the magnifier anywhere and tap it to search</string>
+    <string name="set_tab_general">General</string>
+    <string name="set_tab_game">Game</string>
+    <string name="set_tab_look">Appearance</string>
+    <string name="settings_ram_hint">Keep below your device free RAM</string>
+    <string name="common_select">Select</string>
+    <string name="accounts_no_active">No player yet</string>
+    <string name="accounts_add_first">Add an account to start</string>
+    <string name="accounts_type_offline">Offline account</string>
 </resources>

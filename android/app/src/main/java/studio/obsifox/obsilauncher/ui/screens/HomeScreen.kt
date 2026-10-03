@@ -41,6 +41,8 @@ import studio.obsifox.obsilauncher.R
 import studio.obsifox.obsilauncher.app
 import studio.obsifox.obsilauncher.core.game.GameState
 import studio.obsifox.obsilauncher.core.instance.Instance
+import studio.obsifox.obsilauncher.core.loaders.LoaderType
+import studio.obsifox.obsilauncher.ui.components.LoaderIcon
 import studio.obsifox.obsilauncher.ui.components.ObsiGhostButton
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
@@ -188,12 +190,16 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                     modifier = Modifier.padding(bottom = 6.dp),
                 ) {
-                    // version chip → Versions screen
+                    // version chip → Versions screen — grass block for vanilla,
+                    // the loader's own mark for loader builds
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable(onClick = onPickVersion),
                     ) {
-                        GrassBlockIcon(Modifier.size(20.dp))
+                        LoaderIcon(
+                            type = active?.loaderType ?: LoaderType.VANILLA,
+                            modifier = Modifier.size(20.dp),
+                        )
                         Spacer(Modifier.width(8.dp))
                         InfoText(active?.let { loaderBadge(it) } ?: "—")
                     }
@@ -342,30 +348,6 @@ private fun InfoText(text: String) {
 }
 
 // icons — drawn, not font glyphs, so they never break -------------------------
-
-/** 8-bit grass block: green top, dirt body. */
-@Composable
-private fun GrassBlockIcon(modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        drawRect(Color(0xFF7A4E2A), size = Size(w, h))
-        // pixel specks in the dirt
-        val p = w / 8f
-        drawRect(Color(0xFF5E3A1E), topLeft = Offset(p, h * 0.55f), size = Size(p, p))
-        drawRect(Color(0xFF93603A), topLeft = Offset(p * 4, h * 0.7f), size = Size(p, p))
-        drawRect(Color(0xFF5E3A1E), topLeft = Offset(p * 6, h * 0.5f), size = Size(p, p))
-        // grass cap
-        drawRect(Color(0xFF6FAE3E), size = Size(w, h * 0.3f))
-        drawRect(Color(0xFF8CCB54), topLeft = Offset(0f, 0f), size = Size(w, h * 0.12f))
-        // rim
-        drawRect(
-            Color(0x33000000),
-            size = Size(w, h),
-            style = Stroke(width = 1.dp.toPx()),
-        )
-    }
-}
 
 /** thin clock face. */
 @Composable

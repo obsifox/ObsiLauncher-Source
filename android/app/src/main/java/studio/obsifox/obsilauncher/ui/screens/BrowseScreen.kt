@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -44,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -61,20 +63,26 @@ import studio.obsifox.obsilauncher.core.modrinth.MrProject
 import studio.obsifox.obsilauncher.core.modrinth.MrVersion
 import studio.obsifox.obsilauncher.core.modrinth.ProjectKind
 import studio.obsifox.obsilauncher.core.modrinth.SearchHit
-import studio.obsifox.obsilauncher.ui.components.GlassCard
 import studio.obsifox.obsilauncher.ui.components.ObsiButton
 import studio.obsifox.obsilauncher.ui.components.ObsiGhostButton
 import studio.obsifox.obsilauncher.ui.components.ObsiTextButton
 import studio.obsifox.obsilauncher.ui.components.ProgressRow
-import studio.obsifox.obsilauncher.ui.components.SectionTitle
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 import kotlin.math.roundToInt
 
+private val TabOrder = listOf(
+    ProjectKind.MODPACK,
+    ProjectKind.MOD,
+    ProjectKind.RESOURCEPACK,
+    ProjectKind.SHADER,
+)
+
 /**
- * The Mods tab: four content cards (mods / modpacks / resource packs /
- * shaders) plus a draggable magnifier button — tapping it opens a popup
- * that asks type (optional) → game version (optional) → name (optional)
- * and searches Modrinth; empty fields simply list the category's top hits.
+ * The Mods tab — a slim category strip sits right under the top bar
+ * (modpack · mod · resource pack · shader pack) and the content streams in
+ * as flat BARS, one per project: icon, title, one-line description,
+ * downloads. The draggable magnifier still opens the guided search popup
+ * (type -> game version -> name).
  */
 @Composable
 fun BrowseScreen() {
@@ -145,167 +153,153 @@ fun BrowseScreen() {
         }
     }
 
+    fun open(kind: ProjectKind) {
+        activeKind = kind
+        appliedQuery = ""
+        appliedVersion = ""
+        results = emptyList()
+        search(kind, "", "")
+    }
+
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            // category cards ----------------------------------------------------
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-                CategoryCard(
-                    label = stringResourceCompat(R.string.browse_mods),
-                    sub = "Modrinth · mods",
-                    res = R.drawable.art_wilderness,
-                    onClick = {
-                        activeKind = ProjectKind.MOD
-                        appliedQuery = ""
-                        appliedVersion = ""
-                        search(ProjectKind.MOD, "", "")
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                CategoryCard(
-                    label = stringResourceCompat(R.string.browse_modpacks),
-                    sub = "Modrinth · modpacks",
-                    res = R.drawable.art_snow,
-                    onClick = {
-                        activeKind = ProjectKind.MODPACK
-                        appliedQuery = ""
-                        appliedVersion = ""
-                        search(ProjectKind.MODPACK, "", "")
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CategoryCard(
-                    label = stringResourceCompat(R.string.browse_resourcepacks),
-                    sub = "Modrinth · resource packs",
-                    res = R.drawable.art_cherry,
-                    onClick = {
-                        activeKind = ProjectKind.RESOURCEPACK
-                        appliedQuery = ""
-                        appliedVersion = ""
-                        search(ProjectKind.RESOURCEPACK, "", "")
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                CategoryCard(
-                    label = stringResourceCompat(R.string.browse_shaders),
-                    sub = "Modrinth · shader packs",
-                    res = R.drawable.art_legacy,
-                    onClick = {
-                        activeKind = ProjectKind.SHADER
-                        appliedQuery = ""
-                        appliedVersion = ""
-                        search(ProjectKind.SHADER, "", "")
-                    },
-                    modifier = Modifier.weight(1f),
+            // category strip — 10dp under the top bar, four slim chips -------
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp, start = 14.dp, end = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TabOrder.forEach { kind ->
+                    val selected = activeKind == kind
+                    Text(
+                        text = when (kind) {
+                            ProjectKind.MOD -> stringResourceCompat(R.string.browse_mods)
+                            ProjectKind.MODPACK -> stringResourceCompat(R.string.browse_modpacks)
+                            ProjectKind.RESOURCEPACK -> stringResourceCompat(R.string.browse_resourcepacks)
+                            ProjectKind.SHADER -> stringResourceCompat(R.string.browse_shaders)
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selected) Color.White else obsi.textDim,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (selected) obsi.accent else Color(0x33140F0C))
+                            .border(
+                                1.dp,
+                                if (selected) Color.Transparent else Color(0x24FFFFFF),
+                                RoundedCornerShape(999.dp),
+                            )
+                            .clickable { open(kind) }
+                            .padding(horizontal = 13.dp, vertical = 7.dp),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "＋",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = obsi.textDim,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { pickMrpack.launch("application/octet-stream") }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
                 )
             }
 
-            Spacer(Modifier.height(6.dp))
-            if (activeInstance != null) {
-                Text(
-                    stringResourceCompat(R.string.browse_target, activeInstance.name, activeInstance.mcVersion),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = obsi.textDim,
-                )
-            } else {
-                Text(
-                    stringResourceCompat(R.string.browse_no_instance),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = obsi.danger,
-                )
+            // instance target line -------------------------------------------
+            Row(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)) {
+                if (activeInstance != null) {
+                    Text(
+                        stringResourceCompat(R.string.browse_target, activeInstance.name, activeInstance.mcVersion),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = obsi.textDim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    Text(
+                        stringResourceCompat(R.string.browse_no_instance),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = obsi.danger,
+                    )
+                }
+                if (appliedQuery.isNotBlank()) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "“${appliedQuery}”",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = obsi.accent,
+                        maxLines = 1,
+                    )
+                }
             }
 
             installProgress?.let { state ->
-                GlassCard(modifier = Modifier.padding(top = 8.dp)) {
-                    when (state) {
-                        is InstallState.Running -> ProgressRow(
-                            state.step.removePrefix("content:"),
-                            state.fraction,
-                        )
-                        else -> {}
+                if (state is InstallState.Running) {
+                    Box(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                        ProgressRow(state.step.removePrefix("content:"), state.fraction)
                     }
                 }
             }
 
             message?.let {
-                GlassCard(modifier = Modifier.padding(top = 8.dp)) {
-                    Text(it, style = MaterialTheme.typography.bodyMedium)
-                    ObsiTextButton(stringResourceCompat(R.string.ok), onClick = { message = null })
+                Box(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
+                    Column {
+                        Text(it, style = MaterialTheme.typography.bodyMedium)
+                        ObsiTextButton(stringResourceCompat(R.string.ok), onClick = { message = null })
+                    }
                 }
             }
 
-            // results ------------------------------------------------------------
-            activeKind?.let { kind ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                    SectionTitle(
-                        when (kind) {
-                            ProjectKind.MOD -> stringResourceCompat(R.string.browse_mods)
-                            ProjectKind.MODPACK -> stringResourceCompat(R.string.browse_modpacks)
-                            ProjectKind.RESOURCEPACK -> stringResourceCompat(R.string.browse_resourcepacks)
-                            ProjectKind.SHADER -> stringResourceCompat(R.string.browse_shaders)
-                        } + if (appliedQuery.isNotBlank()) " · \"${appliedQuery}\"" else "",
-                    )
-                    Spacer(Modifier.weight(1f))
-                    ObsiTextButton(stringResourceCompat(R.string.browse_import_mrpack), onClick = {
-                        pickMrpack.launch("application/octet-stream")
-                    })
-                }
-                if (loading) {
-                    GlassCard { Text("…", color = obsi.textDim) }
-                } else if (error != null) {
-                    GlassCard {
+            // results — flat bars ---------------------------------------------
+            when {
+                activeKind == null -> {
+                    Box(Modifier.fillMaxWidth().padding(top = 40.dp)) {
                         Text(
-                            stringResourceCompat(R.string.err_no_network) + "\n" + error,
-                            color = obsi.danger,
+                            stringResourceCompat(R.string.browse_pick_hint),
                             style = MaterialTheme.typography.bodyMedium,
+                            color = obsi.textDim,
+                            modifier = Modifier.align(Alignment.Center),
                         )
-                        ObsiGhostButton(stringResourceCompat(R.string.dl_retry), onClick = { retryTick++ })
                     }
-                } else if (results.isEmpty()) {
-                    GlassCard { Text(stringResourceCompat(R.string.browse_empty), color = obsi.textDim) }
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                }
+                loading -> {
+                    Box(Modifier.fillMaxWidth().padding(top = 40.dp)) {
+                        Text("…", color = obsi.textDim, modifier = Modifier.align(Alignment.Center))
+                    }
+                }
+                error != null -> {
+                    Box(Modifier.padding(14.dp)) {
+                        Column {
+                            Text(
+                                stringResourceCompat(R.string.err_no_network) + "\n" + error,
+                                color = obsi.danger,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            ObsiGhostButton(stringResourceCompat(R.string.dl_retry), onClick = { retryTick++ })
+                        }
+                    }
+                }
+                results.isEmpty() -> {
+                    Box(Modifier.fillMaxWidth().padding(top = 40.dp)) {
+                        Text(
+                            stringResourceCompat(R.string.browse_empty),
+                            color = obsi.textDim,
+                            modifier = Modifier.align(Alignment.Center),
+                        )
+                    }
+                }
+                else -> {
+                    LazyColumn(Modifier.padding(top = 4.dp)) {
                         items(results, key = { it.projectId }) { hit ->
-                            GlassCard {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            scope.launch {
-                                                try {
-                                                    detail = app.modrinth.api.project(hit.projectId)
-                                                } catch (e: Exception) {
-                                                    error = e.message
-                                                }
-                                            }
-                                        },
-                                ) {
-                                    if (hit.iconUrl.isNotEmpty()) {
-                                        AsyncImage(
-                                            model = hit.iconUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(MaterialTheme.shapes.small),
-                                        )
-                                        Spacer(Modifier.size(10.dp))
-                                    }
-                                    Column(Modifier.weight(1f)) {
-                                        Text(hit.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                        Text(
-                                            hit.description,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = obsi.textDim,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            "${hit.downloads} ⬇ · ${hit.author}",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = obsi.textDim,
-                                        )
+                            ResultBar(hit) {
+                                scope.launch {
+                                    try {
+                                        detail = app.modrinth.api.project(hit.projectId)
+                                    } catch (e: Exception) {
+                                        error = e.message
                                     }
                                 }
                             }
@@ -320,8 +314,8 @@ fun BrowseScreen() {
         Box(
             Modifier
                 .align(Alignment.TopEnd)
-                .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
-                .padding(top = 4.dp, end = 8.dp)
+                .offset { IntOffset(dragOffset.x.roundToInt(), (dragOffset.y + 130f).roundToInt()) }
+                .padding(end = 10.dp)
                 .size(46.dp)
                 .clip(CircleShape)
                 .background(obsi.accentDim.copy(alpha = 0.85f))
@@ -345,7 +339,7 @@ fun BrowseScreen() {
                     Color.White,
                     radius = size.minDimension * 0.32f,
                     center = androidx.compose.ui.geometry.Offset(size.width * 0.42f, size.height * 0.42f),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+                    style = Stroke(stroke),
                 )
                 drawLine(
                     Color.White,
@@ -391,43 +385,66 @@ fun BrowseScreen() {
     }
 }
 
+/** one flat bar: icon, title, description, downloads — no card chrome. */
 @Composable
-private fun CategoryCard(label: String, sub: String, res: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ResultBar(hit: SearchHit, onClick: () -> Unit) {
     val obsi = LocalObsi.current
-    Box(
-        modifier
-            .height(92.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .border(1.dp, obsi.glassBorder, RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick),
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 9.dp),
     ) {
-        androidx.compose.foundation.Image(
-            painter = androidx.compose.ui.res.painterResource(res),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.matchParentSize(),
-        )
-        Box(
-            Modifier
-                .matchParentSize()
-                .background(Brush.verticalGradient(listOf(Color(0x26000000), Color(0xD90B0908)))),
-        )
-        Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 12.dp, vertical = 9.dp)) {
+        if (hit.iconUrl.isNotEmpty()) {
+            AsyncImage(
+                model = hit.iconUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(Color(0x22FFFFFF)),
+            )
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(Modifier.weight(1f)) {
             Text(
-                label,
+                hit.title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFF4EFEA),
+                fontWeight = FontWeight.SemiBold,
+                color = obsi.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                sub,
-                style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFFB9AFA6),
+                hit.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = obsi.textDim,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            formatDownloads(hit.downloads),
+            style = MaterialTheme.typography.labelMedium,
+            color = obsi.accent,
+        )
     }
+    Box(
+        Modifier
+            .padding(start = 66.dp)
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(Color(0x14FFFFFF)),
+    )
+}
+
+private fun formatDownloads(n: Long): String = when {
+    n >= 1_000_000 -> "%.1fM".format(n / 1_000_000f)
+    n >= 1_000 -> "%.1fk".format(n / 1_000f)
+    else -> n.toString()
 }
 
 /** type (chips) → game version (optional) → name (optional) → search. */
@@ -444,9 +461,7 @@ private fun SearchPopupDialog(
     var version by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
 
-    val kinds = listOf(
-        ProjectKind.MOD, ProjectKind.MODPACK, ProjectKind.RESOURCEPACK, ProjectKind.SHADER,
-    )
+    val kinds = TabOrder
     val versionChoices = buildList {
         if (activeMc.isNotBlank()) add(activeMc)
         addAll(versions.take(40))
@@ -577,6 +592,19 @@ private fun ProjectDetailDialog(
         title = { Text(project.title) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (project.iconUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = project.iconUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Brush.verticalGradient(listOf(Color(0x22FFFFFF), Color(0x11FFFFFF)))),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
                 Text(project.description, style = MaterialTheme.typography.bodyMedium, color = obsi.textDim)
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -585,7 +613,7 @@ private fun ProjectDetailDialog(
                     color = obsi.textDim,
                 )
                 Spacer(Modifier.height(10.dp))
-                SectionTitle(stringResourceCompat(R.string.browse_versions))
+                Text(stringResourceCompat(R.string.browse_versions), style = MaterialTheme.typography.labelLarge, color = obsi.textDim)
                 if (loading) {
                     Text("…", color = obsi.textDim)
                 } else if (versions.isEmpty()) {

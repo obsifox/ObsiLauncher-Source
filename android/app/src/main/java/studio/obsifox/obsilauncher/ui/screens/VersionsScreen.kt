@@ -15,10 +15,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -52,19 +52,21 @@ import studio.obsifox.obsilauncher.core.game.InstallState
 import studio.obsifox.obsilauncher.core.game.McVersion
 import studio.obsifox.obsilauncher.core.instance.Instance
 import studio.obsifox.obsilauncher.core.loaders.LoaderType
-import studio.obsifox.obsilauncher.obsi.bundledArtFor
+import studio.obsifox.obsilauncher.obsi.artForVersion
+import studio.obsifox.obsilauncher.obsi.releaseNameFor
 import studio.obsifox.obsilauncher.ui.components.GlassCard
-import studio.obsifox.obsilauncher.ui.components.LoaderGlyph
-import studio.obsifox.obsilauncher.ui.components.ObsiButton
+import studio.obsifox.obsilauncher.ui.components.LoaderIcon
 import studio.obsifox.obsilauncher.ui.components.ObsiGhostButton
 import studio.obsifox.obsilauncher.ui.components.ObsiTextButton
 import studio.obsifox.obsilauncher.ui.components.ProgressRow
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
 /**
- * Version picker as a GRID OF CARDS, each showing the artwork of that
- * version's era; tapping a card opens a compact loader-icon picker where
- * every loader name/version sits in an orange (accent) box with white text.
+ * Version picker — versions are grouped under a PARENT (e.g. every 1.21.x
+ * patch under a single "1.21" card). Each parent card shows the era's
+ * official artwork and how many children it holds; tapping it opens the
+ * child-version menu, and picking a child asks for the loader (icons only,
+ * names/numbers inside orange boxes with white text).
  */
 @Composable
 fun VersionsScreen() {
@@ -92,7 +94,8 @@ fun VersionsScreen() {
     val loaderState by app.loaders.state.collectAsState()
     val instances by app.instances.instances.collectAsState()
 
-    // loader install flow state
+    // install flow state: parent -> child -> loader -> loader version
+    var childPick by remember { mutableStateOf<String?>(null) }
     var loaderPick by remember { mutableStateOf<McVersion?>(null) }
     var loaderVersionPick by remember { mutableStateOf<Pair<LoaderType, McVersion>?>(null) }
 
@@ -133,13 +136,29 @@ fun VersionsScreen() {
                 app.instances.setActive(v.id)
                 app.settings.selectedVersionValue = v.versionId
             }
-            1 -> RemoteGrid(releases, manifestLoading) { loaderPick = it }
+            1 -> ParentGrid(releases, manifestLoading, onOpen = { childPick = it })
             2 -> RemoteGrid(snapshots, manifestLoading) { loaderPick = it }
-            3 -> RemoteGrid(old, manifestLoading) { loaderPick = it }
+            3 -> ParentGrid(old, manifestLoading, onOpen = { childPick = it })
         }
     }
 
-    // step 1: loader icons for this Minecraft version -------------------------
+    // step 1: the parent's children ------------------------------------------
+    childPick?.let { parent ->
+        ChildVersionDialog(
+            parent = parent,
+            versions = when (tab) {
+                3 -> old
+                else -> releases
+            }.filter { parentId(it.id) == parent },
+            onDismiss = { childPick = null },
+            onPick = { mc ->
+                childPick = null
+                loaderPick = mc
+            },
+        )
+    }
+
+    // step 2: loader icons for the chosen child -------------------------------
     loaderPick?.let { mc ->
         LoaderPickerDialog(
             mc = mc,
@@ -159,7 +178,7 @@ fun VersionsScreen() {
         )
     }
 
-    // step 2: loader version numbers (orange chips) ---------------------------
+    // step 3: loader version numbers (orange chips) ---------------------------
     loaderVersionPick?.let { (type, mc) ->
         LoaderVersionDialog(
             type = type,
@@ -180,6 +199,19 @@ fun VersionsScreen() {
     }
 }
 
+/** "1.21.4" -> "1.21", "26.3" -> "26" — the representative parent group. */
+internal fun parentId(versionId: String): String {
+    val base = versionId.substringBefore('-').substringBefore('+')
+    val parts = base.split('.')
+    return if (parts.size >= 2 && parts[0].all(Char::isDigit) && parts[0].isNotEmpty() &&
+        parts[1].all(Char::isDigit) && parts[1].isNotEmpty()
+    ) {
+        "${parts[0]}.${parts[1]}"
+    } else {
+        base
+    }
+}
+
 /** one version card: era artwork + version id + type. */
 @Composable
 private fun VersionCard(
@@ -187,6 +219,7 @@ private fun VersionCard(
     subtitle: String,
     mcVersion: String,
     selected: Boolean,
+    loaderType: LoaderType? = null,
     badge: String? = null,
     onClick: () -> Unit,
 ) {
@@ -204,7 +237,7 @@ private fun VersionCard(
             .clickable(onClick = onClick),
     ) {
         Image(
-            painter = painterResource(bundledArtFor(mcVersion)),
+            painter = painterResource(artForVersion(mcVersion)),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.matchParentSize(),
@@ -233,6 +266,16 @@ private fun VersionCard(
                 color = Color(0xFFB9AFA6),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        // the loader's own icon, top-left — grass block for vanilla builds
+        if (loaderType != null) {
+            LoaderIcon(
+                type = loaderType,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .size(26.dp),
             )
         }
         if (badge != null) {
@@ -273,6 +316,7 @@ private fun InstalledGrid(instances: List<Instance>, onSelect: (Instance) -> Uni
                 subtitle = loaderBadge(instance),
                 mcVersion = instance.mcVersion,
                 selected = instance.id == app.instances.activeId.value,
+                loaderType = instance.loaderType,
                 badge = stringResourceCompat(R.string.versions_selected).takeIf {
                     instance.id == app.instances.activeId.value
                 },
@@ -282,6 +326,7 @@ private fun InstalledGrid(instances: List<Instance>, onSelect: (Instance) -> Uni
     }
 }
 
+/** flat card grid — snapshots and anything that has no family grouping. */
 @Composable
 private fun RemoteGrid(
     versions: List<McVersion>,
@@ -315,6 +360,181 @@ private fun RemoteGrid(
             )
         }
     }
+}
+
+/**
+ * The PARENT grid — one card per version family, era artwork + the family's
+ * release name + an orange chip counting the children inside.
+ */
+@Composable
+private fun ParentGrid(
+    versions: List<McVersion>,
+    loading: Boolean,
+    onOpen: (String) -> Unit,
+) {
+    val obsi = LocalObsi.current
+    if (versions.isEmpty()) {
+        GlassCard {
+            Text(
+                if (loading) "…" else stringResourceCompat(R.string.versions_empty_remote),
+                color = obsi.textDim,
+            )
+        }
+        return
+    }
+    val groups = remember(versions) {
+        versions.sortedByDescending { it.releaseTime }
+            .groupBy { parentId(it.id) }
+            .map { (parent, children) ->
+                ParentGroup(parent, children)
+            }
+            .sortedByDescending { it.newest.releaseTime }
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
+    ) {
+        items(groups, key = { it.parent }) { g ->
+            val name = releaseNameFor(g.parent)
+            ParentCard(
+                parent = g.parent,
+                subtitle = name.ifBlank { g.newest.type },
+                count = g.children.size,
+                latest = g.newest.id,
+                onClick = { onOpen(g.parent) },
+            )
+        }
+    }
+}
+
+private data class ParentGroup(val parent: String, val children: List<McVersion>) {
+    val newest: McVersion get() = children.first()
+}
+
+@Composable
+private fun ParentCard(
+    parent: String,
+    subtitle: String,
+    count: Int,
+    latest: String,
+    onClick: () -> Unit,
+) {
+    val obsi = LocalObsi.current
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(1.7f)
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.5.dp, Color(0x2EFFFFFF), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+    ) {
+        Image(
+            painter = painterResource(artForVersion(latest)),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize(),
+        )
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0x14000000), Color(0xCC0B0908)),
+                    ),
+                ),
+        )
+        Column(Modifier.align(Alignment.BottomStart).padding(10.dp)) {
+            Text(
+                parent,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFF4EFEA),
+                maxLines = 1,
+            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFFB9AFA6),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        // the orange marker: this parent represents N versions
+        Text(
+            " $count ",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(obsi.accent)
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+/** the parent's children, newest first, ids inside orange boxes. */
+@Composable
+private fun ChildVersionDialog(
+    parent: String,
+    versions: List<McVersion>,
+    onDismiss: () -> Unit,
+    onPick: (McVersion) -> Unit,
+) {
+    val obsi = LocalObsi.current
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResourceCompat(R.string.parent_pick_title, parent)) },
+        text = {
+            if (versions.isEmpty()) {
+                Text("…", color = obsi.textDim)
+            } else {
+                LazyColumn(modifier = Modifier.height(340.dp)) {
+                    items(versions, key = { it.id }) { v ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(v) }
+                                .padding(vertical = 6.dp),
+                        ) {
+                            Text(
+                                v.id,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                modifier = Modifier
+                                    .width(130.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .background(obsi.accent)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                releaseNameFor(parentId(v.id)).takeIf { it.isNotBlank() && parentId(v.id) != v.id }?.let {
+                                    Text(it, style = MaterialTheme.typography.labelMedium, color = obsi.text)
+                                }
+                                Text(
+                                    v.releaseTime.take(10) + if (v.type != "release") " · ${v.type}" else "",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = obsi.textDim,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { ObsiTextButton(stringResourceCompat(R.string.cancel), onClick = onDismiss) },
+    )
 }
 
 /** loader picker as a single row of icon tiles with orange name chips. */
@@ -356,10 +576,10 @@ private fun LoaderPickerDialog(
                                 Modifier
                                     .size(46.dp)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(obsi.accentDim.copy(alpha = 0.4f)),
+                                    .background(Color(0xFFFFFFFF)),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                LoaderGlyph(type = type, color = obsi.text, modifier = Modifier.size(28.dp))
+                                LoaderIcon(type = type, modifier = Modifier.size(34.dp))
                             }
                             Spacer(Modifier.height(5.dp))
                             // loader name inside an orange box, white text

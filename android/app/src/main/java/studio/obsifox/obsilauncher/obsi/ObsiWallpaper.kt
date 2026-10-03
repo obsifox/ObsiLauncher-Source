@@ -276,25 +276,71 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
 }
 
 /** Bundled offline artwork for a version era — background + version cards. */
-fun bundledArtFor(mcVersion: String?): Int = when {
-    isAtLeastRef(mcVersion, "1.20") -> R.drawable.art_cherry
-    isAtLeastRef(mcVersion, "1.18") -> R.drawable.art_snow
-    isAtLeastRef(mcVersion, "1.13") -> R.drawable.art_wilderness
-    else -> R.drawable.art_legacy
+fun bundledArtFor(mcVersion: String?): Int = artForVersion(mcVersion)
+
+/**
+ * One official minecraft.net wallpaper per era (bundled in the APK).
+ * Snapshots and unknown ids fall back to the current era's art.
+ */
+fun artForVersion(mcVersion: String?): Int {
+    val v = mcVersion?.trim()?.removePrefix("v") ?: return R.drawable.wp_wilderness_bound
+    val base = v.substringBefore('-').substringBefore('+')
+    fun part(i: Int): Int = base.split('.').getOrNull(i)?.filter(Char::isDigit)?.toIntOrNull() ?: -1
+    val major = part(0); val minor = part(1); val patch = part(2)
+    return when {
+        major == 26 -> when {
+            minor >= 3 -> R.drawable.wp_wilderness_bound
+            minor == 2 -> R.drawable.wp_chaos_cubed
+            minor == 1 -> R.drawable.wp_tiny_takeover
+            else -> R.drawable.wp_wilderness_bound
+        }
+        major == 1 -> when (minor) {
+            21 -> when {
+                patch >= 9 -> R.drawable.wp_copper
+                patch >= 6 -> R.drawable.wp_skies
+                patch == 5 -> R.drawable.wp_spring
+                patch in 3..4 -> R.drawable.wp_garden
+                patch in 2..3 -> R.drawable.wp_bundles
+                else -> R.drawable.wp_tricky
+            }
+            20 -> R.drawable.wp_trails
+            19 -> R.drawable.wp_wild
+            18 -> R.drawable.wp_caves2
+            17 -> R.drawable.wp_caves1
+            16 -> R.drawable.wp_nether
+            15 -> R.drawable.wp_buzzy
+            14 -> R.drawable.wp_village
+            13 -> R.drawable.wp_aquatic
+            12 -> R.drawable.wp_worldcolor
+            else -> R.drawable.wp_java
+        }
+        else -> R.drawable.wp_java
+    }
 }
 
-private fun isAtLeastRef(mcVersion: String?, ref: String): Boolean {
-    if (mcVersion == null) return false
-    fun nums(v: String) = v.substringBefore('-').split('.')
-        .map { part -> part.filter(Char::isDigit).take(3).ifEmpty { "0" }.toIntOrNull() ?: 0 }
-    val a = nums(mcVersion)
-    val b = nums(ref)
-    for (i in 0 until maxOf(a.size, b.size)) {
-        val x = a.getOrElse(i) { 0 }
-        val y = b.getOrElse(i) { 0 }
-        if (x != y) return x > y
+/** The official release name for a parent version group ("1.21" -> Tricky Trials). */
+fun releaseNameFor(parent: String): String = when {
+    parent.startsWith("26.") -> when (parent) {
+        "26.3" -> "Wilderness Bound"
+        "26.2" -> "Chaos Cubed"
+        "26.1" -> "Tiny Takeover"
+        else -> ""
     }
-    return true
+    parent.startsWith("1.21") -> "Tricky Trials"
+    parent.startsWith("1.20") -> "Trails & Tales"
+    parent.startsWith("1.19") -> "The Wild Update"
+    parent.startsWith("1.18") -> "Caves & Cliffs: Part II"
+    parent.startsWith("1.17") -> "Caves & Cliffs: Part I"
+    parent.startsWith("1.16") -> "The Nether Update"
+    parent.startsWith("1.15") -> "Buzzy Bees"
+    parent.startsWith("1.14") -> "Village & Pillage"
+    parent.startsWith("1.13") -> "Update Aquatic"
+    parent.startsWith("1.12") -> "World of Color"
+    parent.startsWith("1.11") -> "Exploration Update"
+    parent.startsWith("1.10") -> "Frostburn Update"
+    parent.startsWith("1.9") -> "Combat Update"
+    parent.startsWith("1.8") -> "Bountiful Update"
+    else -> ""
 }
 
 /**

@@ -43,7 +43,6 @@ object SkinManager {
         if (!account.localSkinEnabled) return null
         val skin = skinFile(context, account.id)
         val cape = capeFile(context, account.id)
-        if (!skin.isFile && !cape.isFile) return null
         val cslDir = File(gameDir, "CustomSkinLoader/LocalSkin")
         cslDir.mkdirs()
         if (skin.isFile) {
@@ -51,6 +50,18 @@ object SkinManager {
             // wide/slim model hint via the .skin info file CustomSkinLoader reads
             val model = if (account.skinModel == "slim") "slim" else "default"
             File(cslDir, "${account.name}.skin").writeText(model)
+        } else {
+            // no custom pick: place the bundled default STEVE skin so the
+            // launcher head and the in-game body always match
+            runCatching {
+                context.assets.open("skins/steve.png").use { input ->
+                    File(cslDir, "${account.name}.png").outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                val model = if (account.skinModel == "slim") "slim" else "default"
+                File(cslDir, "${account.name}.skin").writeText(model)
+            }
         }
         if (cape.isFile) {
             val capeDir = File(gameDir, "CustomSkinLoader/LocalCape")

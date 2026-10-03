@@ -1,7 +1,6 @@
 package studio.obsifox.obsilauncher.ui.gate
 
 import android.content.Intent
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,11 +26,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -44,19 +41,23 @@ import studio.obsifox.obsilauncher.R
 import studio.obsifox.obsilauncher.app
 import studio.obsifox.obsilauncher.core.update.UpdateGate
 import studio.obsifox.obsilauncher.ui.screens.stringResourceCompat
-import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
 /**
- * The boot gate: a calm Minecraft-launcher-style screen that checks for
- * launcher updates and the runtime pack automatically before the shell
- * appears. Mirrors the reference design — centered wordmark, status line,
- * progress bar, "check again" and a bottom-right continue button.
+ * The boot gate — mirrors Mojang's own launcher boot screen:
+ * a completely black screen, the red MOJANG STUDIOS wordmark up top,
+ * a status line + progress, the ObsiLauncher brand bottom-left and a
+ * Skip pill bottom-right.
+ *
+ * Everything is automatic — no questions asked:
+ *  · a newer release is found  -> the APK downloads right away
+ *  · runtimes / JVM missing    -> they are installed right away
+ *  · Skip is disabled while any download runs; once everything is ready
+ *    the launcher enters the main UI on its own.
  */
 @Composable
 fun UpdateGateScreen(onEnter: () -> Unit) {
     val context = LocalContext.current
     val app = context.app
-    val obsi = LocalObsi.current
     val gate = app.updateGate
     val step by gate.step.collectAsState()
     val apk by gate.updateApk.collectAsState()
@@ -66,34 +67,42 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
         if (step == UpdateGate.Step.Idle) gate.run()
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF0B0908))) {
-        // subtle radial glow, like the reference boot screen
-        Canvas(Modifier.fillMaxSize()) {
-            val r = size.width * 0.55f
-            drawCircle(
-                brush = Brush.radialGradient(
-                    listOf(Color(0x33D6402E), Color.Transparent),
-                    center = androidx.compose.ui.geometry.Offset(size.width * 0.5f, size.height * 0.52f),
-                    radius = r,
-                ),
-                radius = r,
-                center = androidx.compose.ui.geometry.Offset(size.width * 0.5f, size.height * 0.52f),
-            )
+    // automation: update found -> download it immediately, then continue
+    // with the runtime check; ready -> walk into the launcher.
+    LaunchedEffect(step) {
+        when (step) {
+            is UpdateGate.Step.UpdateAvailable -> {
+                launch { gate.downloadUpdate() }
+                launch { gate.checkRuntime() }
+            }
+            is UpdateGate.Step.UpdateReady -> {
+                apk?.let { installApk(context, it) }
+                kotlinx.coroutines.delay(1400)
+                onEnter()
+            }
+            UpdateGate.Step.Ready -> {
+                kotlinx.coroutines.delay(700)
+                onEnter()
+            }
+            else -> {}
         }
+    }
+
+    // Skip is only blocked while something is actually downloading/installing
+    val skipEnabled = when (step) {
+        is UpdateGate.Step.DownloadingUpdate, is UpdateGate.Step.InstallingRuntime -> false
+        else -> true
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
 
         // centered status -----------------------------------------------------
         Column(
             Modifier.align(Alignment.Center).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = "OBSILAUNCHER",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 6.sp,
-                color = Color(0xFFD6402E),
-            )
-            Spacer(Modifier.height(26.dp))
+            MojangWordmark()
+            Spacer(Modifier.height(34.dp))
 
             val (dot, title, sub) = when (val s = step) {
                 UpdateGate.Step.Idle, UpdateGate.Step.CheckingUpdate ->
@@ -128,28 +137,27 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
             Text(sub, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB9AFA6))
 
             Spacer(Modifier.height(18.dp))
-            when (step) {
+            when (val s = step) {
                 is UpdateGate.Step.DownloadingUpdate -> {
-                    val s = step as UpdateGate.Step.DownloadingUpdate
                     LinearProgressIndicator(
                         progress = { if (s.total > 0) s.done.toFloat() / s.total else 0f },
                         modifier = Modifier.fillMaxWidth(0.34f).height(3.dp).clip(RoundedCornerShape(2.dp)),
-                        color = Color(0xFFD6402E),
-                        trackColor = Color(0x33FFFFFF),
+                        color = Color(0xFFDB2F26),
+                        trackColor = Color(0x24FFFFFF),
                     )
                 }
                 is UpdateGate.Step.InstallingRuntime -> {
-                    val frac = (step as UpdateGate.Step.InstallingRuntime).fraction
                     LinearProgressIndicator(
+                        progress = { s.fraction ?: 0f },
                         modifier = Modifier.fillMaxWidth(0.34f).height(3.dp).clip(RoundedCornerShape(2.dp)),
-                        color = Color(0xFFD6402E),
-                        trackColor = Color(0x33FFFFFF),
+                        color = Color(0xFFDB2F26),
+                        trackColor = Color(0x24FFFFFF),
                     )
                 }
                 else -> {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth(0.34f).height(3.dp).clip(RoundedCornerShape(2.dp)),
-                        color = Color(0xFFD6402E),
+                        color = Color(0xFFDB2F26),
                         trackColor = Color(0x1AFFFFFF),
                     )
                 }
@@ -157,74 +165,80 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
 
             // retry / install actions ----------------------------------------
             Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                when (step) {
-                    is UpdateGate.Step.UpdateAvailable -> {
-                        GateAction("↓", stringResourceCompat(R.string.gate_install_update)) {
-                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                gate.downloadUpdate()
-                            }
+            when (step) {
+                is UpdateGate.Step.UpdateFailed, UpdateGate.Step.RuntimeFailed, UpdateGate.Step.RuntimeMissing -> {
+                    GateAction("⟳", stringResourceCompat(R.string.gate_check_again)) {
+                        gate.reset()
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            gate.run(skipUpdate = true)
                         }
                     }
-                    UpdateGate.Step.UpdateReady -> {
-                        apk?.let { file ->
-                            GateAction("↑", stringResourceCompat(R.string.gate_open_installer)) {
-                                installApk(context, file)
-                            }
-                        }
-                    }
-                    else -> {}
                 }
-                GateAction("⟳", stringResourceCompat(R.string.gate_check_again)) {
-                    gate.reset()
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                        gate.run(skipUpdate = step is UpdateGate.Step.UpdateAvailable || step is UpdateGate.Step.UpdateReady)
-                    }
-                }
+                else -> {}
             }
         }
 
-        // bottom-left brand ----------------------------------------------------
+        // bottom-left brand: the ObsiLauncher mark ------------------------------
         Row(
             Modifier.align(Alignment.BottomStart).padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier
-                    .size(30.dp)
+            Image(
+                painter = painterResource(R.drawable.obsi_logo),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(34.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(obsi.accentDim.copy(alpha = 0.5f))
-                    .border(1.dp, obsi.accent.copy(alpha = 0.6f), RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("◆", color = obsi.accent, style = MaterialTheme.typography.titleSmall)
-            }
+                    .border(1.dp, Color(0x40F26A1B), RoundedCornerShape(8.dp)),
+            )
             Spacer(Modifier.width(9.dp))
             Text("ObsiLauncher", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = Color(0xFFF4EFEA))
         }
 
-        // bottom-right continue -------------------------------------------------
+        // bottom-right Skip ------------------------------------------------------
         Row(
             Modifier
                 .align(Alignment.BottomEnd)
                 .padding(18.dp)
+                .alpha(if (skipEnabled) 1f else 0.35f)
                 .clip(RoundedCornerShape(999.dp))
-                .background(Color(0x2EFFFFFF))
+                .background(if (skipEnabled) Color(0x2EFFFFFF) else Color(0x14FFFFFF))
                 .border(1.dp, Color(0x3DFFFFFF), RoundedCornerShape(999.dp))
-                .clickable(onClick = onEnter)
-                .padding(horizontal = 20.dp, vertical = 11.dp),
+                .clickable(enabled = skipEnabled, onClick = onEnter)
+                .padding(horizontal = 24.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                stringResourceCompat(R.string.gate_continue),
+                stringResourceCompat(R.string.gate_skip),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp,
                 color = Color(0xFFF4EFEA),
             )
-            Spacer(Modifier.width(8.dp))
-            Text("→", color = Color(0xFFF4EFEA), style = MaterialTheme.typography.titleMedium)
         }
+    }
+}
+
+/** The red Mojang Studios wordmark — drawn with type, no image assets. */
+@Composable
+private fun MojangWordmark() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = "MOJANG",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 3.sp,
+            color = Color(0xFFDB2F26),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "S T U D I O S",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 4.sp,
+            color = Color(0xFFDB2F26),
+        )
     }
 }
 

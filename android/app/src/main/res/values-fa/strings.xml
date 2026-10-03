@@ -253,4 +253,17 @@
     <string name="browse_search_any">همه</string>
     <string name="browse_search_name">نام (اختیاری)</string>
     <string name="browse_search_name_hint">خالی بگذارید تا برترین‌ها نمایش داده شود</string>
+
+    <!-- 1.8.0 گیت + ورژن مادر + بازطراحی -->
+    <string name="gate_skip">رد کردن</string>
+    <string name="parent_pick_title">ورژن‌های %1$s</string>
+    <string name="browse_pick_hint">یک دسته از بالا انتخاب کن · یا ذره‌بین را بکش و لمس کن تا جستجو کنی</string>
+    <string name="set_tab_general">عمومی</string>
+    <string name="set_tab_game">بازی</string>
+    <string name="set_tab_look">ظاهر</string>
+    <string name="settings_ram_hint">کمتر از رم آزاد دستگاه نگه دار</string>
+    <string name="common_select">انتخاب</string>
+    <string name="accounts_no_active">هنوز بازیکنی نیست</string>
+    <string name="accounts_add_first">برای شروع یک حساب اضافه کن</string>
+    <string name="accounts_type_offline">حساب آفلاین</string>
 </resources>

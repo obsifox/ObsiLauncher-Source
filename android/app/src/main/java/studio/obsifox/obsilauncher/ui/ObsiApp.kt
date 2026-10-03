@@ -164,7 +164,7 @@ fun ObsiApp() {
             val activeAccountId by app.accounts.activeId.collectAsState()
             val activeAccount = accounts.firstOrNull { it.id == activeAccountId }
             ObsiTopBar(
-                playerName = activeAccount?.name,
+                account = activeAccount,
                 current = screen,
                 onSelect = { screen = it },
                 onAccounts = { screen = Screen.ACCOUNTS },
@@ -176,7 +176,7 @@ fun ObsiApp() {
 
 @Composable
 private fun ObsiTopBar(
-    playerName: String?,
+    account: studio.obsifox.obsilauncher.core.accounts.Account?,
     current: Screen,
     onSelect: (Screen) -> Unit,
     onAccounts: () -> Unit,
@@ -199,25 +199,22 @@ private fun ObsiTopBar(
                 .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // avatar — square pixel-style, opens the accounts screen
+            // the player's real Minecraft head — opens the accounts screen
             Box(
                 Modifier
                     .size(34.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(obsi.accentDim.copy(alpha = 0.55f))
                     .clickable(onClick = onAccounts),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = playerName?.take(1)?.uppercase() ?: "☻",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = obsi.accent,
+                studio.obsifox.obsilauncher.ui.components.PlayerHead(
+                    account = account,
+                    modifier = Modifier.size(34.dp),
                 )
             }
             Spacer(Modifier.width(9.dp))
             Text(
-                text = playerName ?: stringResource(R.string.nav_accounts),
+                text = account?.name ?: stringResource(R.string.nav_accounts),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = obsi.text,
