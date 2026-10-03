@@ -70,9 +70,21 @@ object ObsiComponents {
 
     val ALL: List<Component> = BUNDLED + listOf(JNA) + DOWNLOADABLE_RUNTIMES
 
-    /** raw.githubusercontent source of the Zalith component store (GPL). */
-    private const val ZALITH_RAW =
-        "https://raw.githubusercontent.com/ZalithLauncher/ZalithLauncher/main/ZalithLauncher/src/main/assets/components"
+    /**
+     * Zalith component store (GPL). PINNED to a commit — a movable `main`
+     * branch once broke every runtime download mid-week; files verified
+     * present at this commit (raw 200 OK).
+     */
+    private const val ZALITH_COMMIT = "fe5853b5bcd872c93e0dba558890a744aaaec9f2"
+    private const val ZALITH_PATH = "ZalithLauncher/src/main/assets/components"
+
+    /** ordered mirror bases for one component dir — raw pinned, jsDelivr, gcore jsDelivr, raw main */
+    val DEFAULT_MIRRORS: List<String> = listOf(
+        "https://raw.githubusercontent.com/ZalithLauncher/ZalithLauncher/$ZALITH_COMMIT/$ZALITH_PATH",
+        "https://cdn.jsdelivr.net/gh/ZalithLauncher/ZalithLauncher@$ZALITH_COMMIT/$ZALITH_PATH",
+        "https://gcore.jsdelivr.net/gh/ZalithLauncher/ZalithLauncher@$ZALITH_COMMIT/$ZALITH_PATH",
+        "https://raw.githubusercontent.com/ZalithLauncher/ZalithLauncher/main/$ZALITH_PATH",
+    )
 
     val installing = MutableStateFlow<String?>(null)
     val progress = MutableStateFlow<Float?>(null)
@@ -89,14 +101,34 @@ object ObsiComponents {
         return File(dir, "lib/libjli.so").isFile && File(dir, "lib/server/libjvm.so").isFile
     }
 
+    /** the two files that prove a JRE pack actually unpacked */
+    private fun jreComplete(dir: File): Boolean =
+        File(dir, "lib/libjli.so").isFile && File(dir, "lib/server/libjvm.so").isFile
+
     /**
      * Extract the bundled Internal-21 JRE (universal + bin-arm64 tar.xz shipped
      * in the APK) into the runtime home. Zero-touch: called on shell start.
+     *
+     * Returns [Result.failure] with the REAL cause instead of silently
+     * swallowing it: free space is checked first (the pair unpacks to >260 MB)
+     * and libjli/libjvm are verified after extraction.
      */
-    fun ensureBundledRuntime(context: Context) {
+    fun ensureBundledRuntime(context: Context): Result<Unit> {
         val outDir = runtimeHome(context, "Internal-21")
-        if (File(outDir, "lib/libjli.so").isFile && File(outDir, "lib/server/libjvm.so").isFile) return
-        runCatching {
+        if (jreComplete(outDir)) return Result.success(Unit)
+        try {
+            val probe = Paths.runtimeRoot(context)
+            probe.mkdirs()
+            val stat = android.os.StatFs(probe.absolutePath)
+            val needed = 260L * 1024 * 1024
+            if (stat.availableBytes < needed) {
+                return Result.failure(
+                    IllegalStateException(
+                        "not enough free space for the bundled JRE — " +
+                            "${stat.availableBytes / (1024 * 1024)} MB free, 260 MB needed",
+                    ),
+                )
+            }
             outDir.deleteRecursively()
             outDir.mkdirs()
             for (part in listOf("universal.tar.xz", "bin-arm64.tar.xz")) {
@@ -106,6 +138,14 @@ object ObsiComponents {
                     }
                 }
             }
+            if (!jreComplete(outDir)) {
+                return Result.failure(
+                    IllegalStateException("bundled JRE unpacked incompletely — libjli/libjvm missing after extraction"),
+                )
+            }
+            return Result.success(Unit)
+        } catch (e: Exception) {
+            return Result.failure(e)
         }
     }
 
@@ -157,42 +197,76 @@ object ObsiComponents {
         marker.writeText(want)
     }
 
-    /** Download a non-bundled runtime (Internal-8/17/25) and unpack it. */
-    suspend fun downloadRuntime(context: Context, id: String): Boolean = withContext(Dispatchers.IO) {
-        val c = DOWNLOADABLE_RUNTIMES.firstOrNull { it.id == id } ?: return@withContext false
-        if (isRuntimeInstalled(context, id)) return@withContext true
-        installing.value = c.displayName
-        message.value = null
-        progress.value = null
-        try {
-            val outDir = runtimeHome(context, "Internal-" + id.removePrefix("jre-"))
-            outDir.mkdirs()
-            val parts = listOf("universal.tar.xz", "bin-arm64.tar.xz")
-            for (part in parts) {
-                val url = "$ZALITH_RAW/$id/$part"
-                val staging = File(context.cacheDir, "dl-$id-$part")
-                Http.downloadToFile(url, staging) { done, total ->
-                    progress.value = if (total > 0) done.toFloat() / total else null
-                }
-                progress.value = null
-                TarArchiveInputStream(XZInputStream(FileInputStream(staging))).use { tar ->
-                    untarInto(tar, outDir)
-                }
-                staging.delete()
+    /**
+     * Download a non-bundled runtime (Internal-8/17/25) and unpack it.
+     *
+     * [mirrors] — ordered mirror BASE dirs (optional; defaults to
+     * [DEFAULT_MIRRORS], the pinned Zalith store). Every part is tried
+     * against every mirror in order, so a CDN that 403s a large file
+     * (jsDelivr's size cap) transparently falls through to raw.
+     *
+     * jre-21 is NOT downloadable — it ships inside the APK — and asking
+     * for it yields a clear message instead of a silent `false`.
+     */
+    suspend fun downloadRuntime(context: Context, id: String, mirrors: List<String>? = null): Boolean =
+        withContext(Dispatchers.IO) {
+            val c = DOWNLOADABLE_RUNTIMES.firstOrNull { it.id == id }
+            if (c == null) {
+                message.value = if (id == "jre-21")
+                    "Internal-21 ships inside the app — reinstall ObsiLauncher to restore it"
+                else "unknown runtime: $id"
+                return@withContext false
             }
-            if (!isRuntimeInstalled(context, id)) {
-                throw IllegalStateException("runtime did not unpack completely")
-            }
+            if (isRuntimeInstalled(context, id)) return@withContext true
+            installing.value = c.displayName
             message.value = null
-            true
-        } catch (e: Exception) {
-            message.value = e.message
-            false
-        } finally {
-            installing.value = null
             progress.value = null
+            try {
+                val outDir = runtimeHome(context, "Internal-" + id.removePrefix("jre-"))
+                outDir.mkdirs()
+                val parts = listOf("universal.tar.xz", "bin-arm64.tar.xz")
+                for (part in parts) {
+                    val urls = (mirrors?.takeIf { it.isNotEmpty() } ?: DEFAULT_MIRRORS)
+                        .map { base -> "$base/$id/$part" }
+                    val staging = File(context.cacheDir, "dl-$id-$part")
+                    var ok = false
+                    var lastFailure: Exception? = null
+                    for (url in urls) {
+                        try {
+                            Http.downloadToFile(url, staging) { done, total ->
+                                progress.value = if (total > 0) done.toFloat() / total else null
+                            }
+                            ok = true
+                            break
+                        } catch (e: Exception) {
+                            lastFailure = e
+                        }
+                    }
+                    if (!ok) {
+                        throw IllegalStateException(
+                            "${c.displayName}/$part failed from ${urls.size} mirrors",
+                            lastFailure,
+                        )
+                    }
+                    progress.value = null
+                    TarArchiveInputStream(XZInputStream(FileInputStream(staging))).use { tar ->
+                        untarInto(tar, outDir)
+                    }
+                    staging.delete()
+                }
+                if (!jreComplete(outDir)) {
+                    throw IllegalStateException("runtime did not unpack completely (libjli/libjvm missing)")
+                }
+                message.value = null
+                true
+            } catch (e: Exception) {
+                message.value = e.message ?: e.toString()
+                false
+            } finally {
+                installing.value = null
+                progress.value = null
+            }
         }
-    }
 
     fun remove(context: Context, id: String) {
         if (id.startsWith("jre-")) {

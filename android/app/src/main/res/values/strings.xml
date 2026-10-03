@@ -236,6 +236,8 @@
     <string name="gate_update_ready_sub">Open the installer to apply it</string>
     <string name="gate_update_failed">UPDATE CHECK FAILED</string>
     <string name="gate_update_failed_sub">Network trouble — you can retry or continue</string>
+    <string name="gate_update_check_failed">UPDATE CHECK FAILED</string>
+    <string name="gate_update_check_failed_sub">The release server is unreachable — continuing with the runtime check</string>
     <string name="gate_runtime_checking">Checking runtime…</string>
     <string name="gate_runtime_checking_sub">Verifying JVM and the runtime pack</string>
     <string name="gate_runtime_installing">Installing runtime…</string>

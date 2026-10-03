@@ -166,7 +166,7 @@ class ObsiWallpaper(private val context: Context, val settings: ObsiSettings) {
     private fun fetchLatestRelease(): String {
         latestRelease.value.takeIf { it.isNotEmpty() }?.let { return it }
         val v = runCatching {
-            JSONObject(Http.get(LATEST_URL) ?: "{}")
+            JSONObject(Http.getOrNull(LATEST_URL) ?: "{}")
                 .optJSONObject("latest")?.optString("release").orEmpty()
         }.getOrDefault("")
         latestRelease.value = v

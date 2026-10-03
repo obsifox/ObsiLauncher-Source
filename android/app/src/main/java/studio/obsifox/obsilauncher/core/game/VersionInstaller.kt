@@ -51,7 +51,7 @@ class VersionInstaller(private val context: Context) {
                 val dir = Paths.versionDir(context, version.id)
                 dir.mkdirs()
                 emit("manifest", 0, 1, null, progress)
-                val text = Http.get(version.url) ?: throw IllegalStateException("no metadata for ${version.id}")
+                val text = Http.get(version.url) // throws with the real reason when unreachable
                 versionJson(context, version.id).writeText(text)
                 installAndVerify(version.id, JSONObject(text), settings, progress)
                 state.value = InstallState.Done(version.id)
@@ -258,7 +258,7 @@ class VersionInstaller(private val context: Context) {
                 parent.mkdirs()
                 emit("manifest", 0, 1, null, progress)
                 val parentJsonUrl = resolveParentUrl(inherits)
-                val text = Http.get(parentJsonUrl) ?: throw IllegalStateException("no metadata for $inherits")
+                val text = Http.get(parentJsonUrl) // throws with the real reason when unreachable
                 versionJson(context, inherits).writeText(text)
                 installRest(inherits, JSONObject(text), settings, progress)
             }

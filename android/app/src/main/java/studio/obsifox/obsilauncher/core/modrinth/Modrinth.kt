@@ -95,7 +95,7 @@ class ModrinthApi(private val base: String = "https://api.modrinth.com/v2") {
         }
         val url = "$base/search?query=${Http.enc(query)}&facets=${Http.enc(facets.toString())}" +
             "&index=$sort&limit=$limit&offset=$offset"
-        val root = JSONObject(Http.get(url) ?: return SearchResponse(emptyList(), 0))
+        val root = JSONObject(Http.getOrNull(url) ?: return SearchResponse(emptyList(), 0))
         val hits = root.optJSONArray("hits") ?: JSONArray()
         val list = ArrayList<SearchHit>(hits.length())
         for (i in 0 until hits.length()) {
@@ -117,7 +117,7 @@ class ModrinthApi(private val base: String = "https://api.modrinth.com/v2") {
     }
 
     fun project(idOrSlug: String): MrProject {
-        val p = JSONObject(Http.get("$base/project/${Http.enc(idOrSlug)}") ?: throw IllegalStateException("project not found"))
+        val p = JSONObject(Http.getOrNull("$base/project/${Http.enc(idOrSlug)}") ?: throw IllegalStateException("project not found"))
         return MrProject(
             id = p.optString("id"),
             slug = p.optString("slug"),
@@ -137,7 +137,7 @@ class ModrinthApi(private val base: String = "https://api.modrinth.com/v2") {
     fun projects(ids: Collection<String>): List<MrProject> {
         if (ids.isEmpty()) return emptyList()
         val arr = JSONArray(); ids.forEach { arr.put(it) }
-        val text = Http.get("$base/projects?ids=${Http.enc(arr.toString())}") ?: return emptyList()
+        val text = Http.getOrNull("$base/projects?ids=${Http.enc(arr.toString())}") ?: return emptyList()
         val root = JSONArray(text)
         val out = ArrayList<MrProject>(root.length())
         for (i in 0 until root.length()) {
@@ -166,17 +166,17 @@ class ModrinthApi(private val base: String = "https://api.modrinth.com/v2") {
             if (gameVersions.isNotEmpty()) add("game_versions=" + Http.enc(JSONArray().apply { gameVersions.forEach { put(it) } }.toString()))
         }.joinToString("&")
         val url = "$base/project/${Http.enc(projectIdOrSlug)}/version" + if (q.isNotEmpty()) "?$q" else ""
-        val text = Http.get(url) ?: return emptyList()
+        val text = Http.getOrNull(url) ?: return emptyList()
         return parseVersions(JSONArray(text))
     }
 
     fun version(versionId: String): MrVersion =
-        parseVersions(JSONArray().put(JSONObject(Http.get("$base/version/${Http.enc(versionId)}") ?: throw IllegalStateException("version not found")))).first()
+        parseVersions(JSONArray().put(JSONObject(Http.getOrNull("$base/version/${Http.enc(versionId)}") ?: throw IllegalStateException("version not found")))).first()
 
     fun versionsByIds(ids: Collection<String>): List<MrVersion> {
         if (ids.isEmpty()) return emptyList()
         val arr = JSONArray(); ids.forEach { arr.put(it) }
-        val text = Http.get("$base/versions?ids=${Http.enc(arr.toString())}") ?: return emptyList()
+        val text = Http.getOrNull("$base/versions?ids=${Http.enc(arr.toString())}") ?: return emptyList()
         return parseVersions(JSONArray(text))
     }
 

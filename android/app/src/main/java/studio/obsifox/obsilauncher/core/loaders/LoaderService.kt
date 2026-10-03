@@ -64,7 +64,7 @@ class LoaderService(private val context: Context) {
     }
 
     private fun metaVersions(url: String): List<LoaderVersion> {
-        val text = Http.get(url) ?: return emptyList()
+        val text = Http.getOrNull(url) ?: return emptyList()
         val arr = org.json.JSONArray(text)
         val out = ArrayList<LoaderVersion>(arr.length())
         for (i in 0 until arr.length()) {
@@ -78,9 +78,9 @@ class LoaderService(private val context: Context) {
     }
 
     private fun forgeVersions(mc: String): List<LoaderVersion> {
-        val xml = Http.get("$FORGE_MAVEN/net/minecraftforge/forge/maven-metadata.xml") ?: return emptyList()
+        val xml = Http.getOrNull("$FORGE_MAVEN/net/minecraftforge/forge/maven-metadata.xml") ?: return emptyList()
         val rec = runCatching {
-            Http.get("https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json")
+            Http.getOrNull("https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json")
                 ?.let { JSONObject(it).optJSONObject("promos")?.optString("$mc-recommended") }
         }.getOrNull()
         return versionTags(xml).filter { it.startsWith("$mc-") }
@@ -91,7 +91,7 @@ class LoaderService(private val context: Context) {
 
     private fun neoForgeVersions(mc: String): List<LoaderVersion> {
         val prefix = neoForgePrefix(mc) ?: return emptyList()
-        val xml = Http.get("$NEOFORGE_MAVEN/net/neoforged/neoforge/maven-metadata.xml") ?: return emptyList()
+        val xml = Http.getOrNull("$NEOFORGE_MAVEN/net/neoforged/neoforge/maven-metadata.xml") ?: return emptyList()
         val list = versionTags(xml).filter { it.startsWith(prefix) }
         val firstStable = list.firstOrNull { !it.contains("-") }
         return list.map { LoaderVersion(it, stable = !it.contains("-"), recommended = it == firstStable) }
@@ -99,7 +99,7 @@ class LoaderService(private val context: Context) {
 
     /** Best-effort scrape of the official OptiFine downloads page. */
     private fun optiFineVersions(mc: String): List<LoaderVersion> {
-        val html = Http.get("https://optifine.net/downloads") ?: return emptyList()
+        val html = Http.getOrNull("https://optifine.net/downloads") ?: return emptyList()
         val regex = Regex("""OptiFine_${Regex.escape(mc)}[._A-Za-z0-9]*\.jar""")
         return regex.findAll(html).map { it.value }
             .map { it.removePrefix("OptiFine_").removeSuffix(".jar") }
@@ -111,7 +111,7 @@ class LoaderService(private val context: Context) {
     /** The adloadx page embeds a signed token needed for the direct file download. */
     fun optiFineDownloadUrl(mc: String, loaderVersion: String): String? {
         val name = "OptiFine_${mc}_${loaderVersion}.jar"
-        val page = Http.get("https://optifine.net/adloadx?f=$name") ?: return null
+        val page = Http.getOrNull("https://optifine.net/adloadx?f=$name") ?: return null
         val token = Regex("""x\s*=\s*["']?([A-Za-z0-9]+)["']?""").find(page)?.groupValues?.get(1)
         return if (token != null) "https://optifine.net/downloadx?f=$name&x=$token" else null
     }
@@ -170,7 +170,7 @@ class LoaderService(private val context: Context) {
         progress: (InstallState) -> Unit,
     ): String {
         progressStep("loader_profile")
-        val text = Http.get(profileUrl) ?: throw IllegalStateException("loader meta server unreachable")
+        val text = Http.get(profileUrl) // throws with the real reason when unreachable
         val id = JSONObject(text).optString("id").takeIf { it.isNotEmpty() }
             ?: throw IllegalStateException("loader profile has no id")
         Paths.versionDir(context, id).mkdirs()

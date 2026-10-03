@@ -140,7 +140,6 @@ class MicrosoftAuth {
     private fun minecraftLoginWithXsts(xstsToken: String, uhs: String): String {
         val body = JSONObject().put("identityToken", "XBL3.0 x=$uhs;$xstsToken").toString()
         val text = Http.postJson("https://api.minecraftservices.com/authentication/login_with_xbox", body)
-            ?: throw IllegalStateException("Minecraft services unreachable")
         return JSONObject(text).getString("access_token")
     }
 

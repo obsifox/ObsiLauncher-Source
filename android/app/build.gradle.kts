@@ -2,8 +2,8 @@ import java.util.Properties
 import com.android.build.api.variant.impl.VariantOutputImpl
 
 // ObsiLauncher release identity (bump here and in defaultConfig)
-val APP_VERSION_NAME = "1.13.1"
-val APP_VERSION_CODE = 11301
+val APP_VERSION_NAME = "1.13.2"
+val APP_VERSION_CODE = 11302
 
 plugins {
     alias(libs.plugins.android.application)
@@ -28,7 +28,7 @@ android {
     defaultConfig {
         applicationId = "studio.obsifox.obsilauncher"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = APP_VERSION_CODE
         versionName = APP_VERSION_NAME
 
@@ -69,6 +69,13 @@ android {
         debug {
             signingConfig = signingConfigs.getByName("releaseBuild")
         }
+    }
+
+    androidResources {
+        // the bundled JRE carries tar.xz parts for every ABI; only the arm64
+        // pair is ever extracted on the shipped build — dropping the other
+        // three tars from the APK saves ~20 MB (90.8 -> ~70 MB)
+        ignoreAssetsPatterns += listOf("bin-arm.tar.xz", "bin-x86.tar.xz", "bin-x86_64.tar.xz")
     }
 
     packaging {

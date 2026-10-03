@@ -68,12 +68,26 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
     }
 
     // automation: update found -> download it immediately, then continue
-    // with the runtime check; ready -> walk into the launcher.
+    // with the runtime check; a failed update check shows its reason for
+    // ~1.6 s and then the runtime stage runs on its own; ready -> walk
+    // into the launcher.
+    //
+    // The gate's work runs on an INDEPENDENT scope on purpose: this effect
+    // is keyed by `step`, and the gate itself changes `step` while working —
+    // a child launch here would be cancelled mid-download/install the moment
+    // the state moved (silently killing the runtime install).
     LaunchedEffect(step) {
         when (step) {
             is UpdateGate.Step.UpdateAvailable -> {
-                launch { gate.downloadUpdate() }
-                launch { gate.checkRuntime() }
+                val io = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+                io.launch { gate.downloadUpdate() }
+                io.launch { gate.checkRuntime() }
+            }
+            is UpdateGate.Step.UpdateCheckFailed -> {
+                kotlinx.coroutines.delay(1600)
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    gate.checkRuntime()
+                }
             }
             is UpdateGate.Step.UpdateReady -> {
                 apk?.let { installApk(context, it) }
@@ -117,6 +131,12 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
                     Triple(Color(0xFF7ED957), stringResourceCompat(R.string.gate_update_ready), stringResourceCompat(R.string.gate_update_ready_sub))
                 UpdateGate.Step.UpdateFailed ->
                     Triple(Color(0xFFE5604C), stringResourceCompat(R.string.gate_update_failed), stringResourceCompat(R.string.gate_update_failed_sub))
+                is UpdateGate.Step.UpdateCheckFailed ->
+                    Triple(
+                        Color(0xFFE5A24C),
+                        stringResourceCompat(R.string.gate_update_check_failed),
+                        s.reason.ifBlank { stringResourceCompat(R.string.gate_update_check_failed_sub) },
+                    )
                 UpdateGate.Step.CheckingRuntime ->
                     Triple(Color(0xFFB9AFA6), stringResourceCompat(R.string.gate_runtime_checking), stringResourceCompat(R.string.gate_runtime_checking_sub))
                 is UpdateGate.Step.InstallingRuntime ->
@@ -124,7 +144,13 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
                 UpdateGate.Step.RuntimeMissing ->
                     Triple(Color(0xFFE5A24C), stringResourceCompat(R.string.gate_runtime_missing), stringResourceCompat(R.string.gate_runtime_missing_sub))
                 UpdateGate.Step.RuntimeFailed ->
-                    Triple(Color(0xFFE5604C), stringResourceCompat(R.string.gate_runtime_failed), stringResourceCompat(R.string.gate_runtime_missing_sub))
+                    Triple(
+                        Color(0xFFE5604C),
+                        stringResourceCompat(R.string.gate_runtime_failed),
+                        // show the REAL cause, not a generic line
+                        gate.lastError?.takeIf { it.isNotBlank() }
+                            ?: stringResourceCompat(R.string.gate_runtime_missing_sub),
+                    )
                 UpdateGate.Step.Ready ->
                     Triple(Color(0xFF7ED957), stringResourceCompat(R.string.gate_up_to_date), stringResourceCompat(R.string.gate_up_to_date_sub))
             }
@@ -166,7 +192,17 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
             // retry / install actions ----------------------------------------
             Spacer(Modifier.height(16.dp))
             when (step) {
-                is UpdateGate.Step.UpdateFailed, UpdateGate.Step.RuntimeFailed, UpdateGate.Step.RuntimeMissing -> {
+                // update-check failures retry WITH the update stage;
+                // runtime failures only re-run the runtime stage
+                is UpdateGate.Step.UpdateFailed, is UpdateGate.Step.UpdateCheckFailed -> {
+                    GateAction("⟳", stringResourceCompat(R.string.gate_check_again)) {
+                        gate.reset()
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            gate.run(skipUpdate = false)
+                        }
+                    }
+                }
+                UpdateGate.Step.RuntimeFailed, UpdateGate.Step.RuntimeMissing -> {
                     GateAction("⟳", stringResourceCompat(R.string.gate_check_again)) {
                         gate.reset()
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {

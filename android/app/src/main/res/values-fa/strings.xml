@@ -236,6 +236,8 @@
     <string name="gate_update_ready_sub">نصب‌کننده را باز کنید تا اعمال شود</string>
     <string name="gate_update_failed">بررسی به‌روزرسانی ناموفق بود</string>
     <string name="gate_update_failed_sub">مشکل شبکه — دوباره تلاش کنید یا ادامه دهید</string>
+    <string name="gate_update_check_failed">بررسی به‌روزرسانی ناموفق بود</string>
+    <string name="gate_update_check_failed_sub">سرور انتشار در دسترس نیست — به بررسی ران‌تایم ادامه می‌دهیم</string>
     <string name="gate_runtime_checking">بررسی ران‌تایم…</string>
     <string name="gate_runtime_checking_sub">بررسی JVM و پک ران‌تایم</string>
     <string name="gate_runtime_installing">نصب ران‌تایم…</string>

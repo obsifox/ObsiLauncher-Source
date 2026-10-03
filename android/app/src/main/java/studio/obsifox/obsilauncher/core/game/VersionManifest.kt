@@ -43,7 +43,7 @@ class VersionManifest(private val context: Context) {
         loading.value = true
         error.value = null
         try {
-            val text = Http.get(MANIFEST_URL) ?: throw IllegalStateException("empty manifest")
+            val text = Http.get(MANIFEST_URL) // throws with the real reason when unreachable
             cacheFile.writeText(text)
             parse(text)
         } catch (e: Exception) {

@@ -1,5 +1,17 @@
 {
-  "_comment": "ObsiLauncher update-gate manifest. When the launcher starts and no runtime pack is installed, it downloads the first arm64-v8a pack listed here automatically (no prompt). Pack format: docs/RUNTIME-PACKS.md. Add a real pack URL to enable zero-touch runtime provisioning.",
-  "version": 1,
-  "packs": []
+  "version": 2,
+  "_comment": "ObsiLauncher runtime manifest (v2). 'defaults.mirrors' are ordered mirror BASE directories for the downloadable Internal-* JRE packs; the gate hands them to the installer verbatim. Mirrors are tried per file in order, so a CDN that refuses a big file (e.g. jsDelivr's size cap on jre-25/universal.tar.xz) transparently falls through to the pinned raw source. Layout: <mirror>/<jre-id>/<part> — parts are universal.tar.xz + bin-arm64.tar.xz, unpacked into runtime/Internal-<java>/. The Zalith component store is pinned to commit fe5853b5bcd872c93e0dba558890a744aaaec9f2 so downloads survive upstream churn.",
+  "defaults": {
+    "mirrors": [
+      "https://raw.githubusercontent.com/ZalithLauncher/ZalithLauncher/fe5853b5bcd872c93e0dba558890a744aaaec9f2/ZalithLauncher/src/main/assets/components",
+      "https://cdn.jsdelivr.net/gh/ZalithLauncher/ZalithLauncher@fe5853b5bcd872c93e0dba558890a744aaaec9f2/ZalithLauncher/src/main/assets/components",
+      "https://gcore.jsdelivr.net/gh/ZalithLauncher/ZalithLauncher@fe5853b5bcd872c93e0dba558890a744aaaec9f2/ZalithLauncher/src/main/assets/components",
+      "https://raw.githubusercontent.com/ZalithLauncher/ZalithLauncher/main/ZalithLauncher/src/main/assets/components"
+    ]
+  },
+  "runtimes": {
+    "jre-8": { "displayName": "Internal-8", "javaVersion": 8, "abi": "arm64-v8a", "parts": ["universal.tar.xz", "bin-arm64.tar.xz"] },
+    "jre-17": { "displayName": "Internal-17", "javaVersion": 17, "abi": "arm64-v8a", "parts": ["universal.tar.xz", "bin-arm64.tar.xz"] },
+    "jre-25": { "displayName": "Internal-25", "javaVersion": 25, "abi": "arm64-v8a", "parts": ["universal.tar.xz", "bin-arm64.tar.xz"] }
+  }
 }

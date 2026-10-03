@@ -1,6 +1,12 @@
 name: Android
 
 # ObsiLauncher for Android — a standalone app written from scratch (no upstream overlay).
+#
+# v1.13.2: android-actions/setup-android@v3 failed on EVERY run and the build
+# step never executed (the red CI). We now use the SDK preinstalled on the
+# runner, install the missing packages via sdkmanager, cache Gradle, build on
+# every push/PR so compile breaks surface early, and VERIFY the artifact
+# (badging, signature, bundled runtime/ABI tarballs) before publishing.
 on:
   workflow_dispatch:
     inputs:
@@ -10,7 +16,10 @@ on:
         required: false
         default: true
   push:
+    branches: ["main"]
     tags: ["v*"]
+  pull_request:
+    branches: ["main"]
 
 permissions:
   contents: write
@@ -23,7 +32,7 @@ jobs:
   apk:
     name: Build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,14 +43,58 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages (preinstalled SDK — no setup-android action)
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKM" ]; then
+            echo "cmdline-tools missing — installing"
+            CLT_ZIP="$(mktemp -u /tmp/clt-XXXX.zip)"
+            curl -sSL -o "$CLT_ZIP" "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+            mkdir -p "$SDK/cmdline-tools" /tmp/clt
+            unzip -q "$CLT_ZIP" -d /tmp/clt
+            mv /tmp/clt/cmdline-tools "$SDK/cmdline-tools/latest"
+            rm -rf /tmp/clt "$CLT_ZIP"
+            SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" --install "platform-tools" "platforms;android-37.2" "build-tools;37.0.0" "ndk;27.2.12479018"
+          echo "---- installed ----"
+          ls "$SDK/platforms" "$SDK/build-tools" "$SDK/ndk"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
 
       - name: Build release APK (arm64-v8a)
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx3g"
+
+      - name: Verify the artifact
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          echo "== badging =="
+          "$SDK/build-tools/37.0.0/aapt2" dump badging "$APK" | head -4
+          "$SDK/build-tools/37.0.0/aapt2" dump badging "$APK" | grep -E "^package" | grep -E "versionName='1\.13\.2'" || { echo "wrong versionName"; exit 1; }
+          echo "== bundled runtime/ABI tarballs =="
+          unzip -l "$APK" | grep -E "assets/components/jre-21/" | tee /tmp/jre21.txt
+          grep -q "jre-21/universal.tar.xz" /tmp/jre21.txt || { echo "MISSING jre-21/universal.tar.xz"; exit 1; }
+          grep -q "jre-21/bin-arm64.tar.xz" /tmp/jre21.txt || { echo "MISSING jre-21/bin-arm64.tar.xz"; exit 1; }
+          if unzip -l "$APK" | grep -Eq "components/jre-21/bin-(arm|x86|x86_64)\.tar\.xz"; then
+            echo "other-ABI tarballs must NOT ship in the APK"; exit 1
+          fi
+          echo "== signature =="
+          "$SDK/build-tools/37.0.0/apksigner" verify --print-certs "$APK" | head -4
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -55,4 +108,14 @@ jobs:
         with:
           tag_name: nightly
           prerelease: true
-          files: android/app/build/outputs/apk/release/*.apk
+          files: |
+            android/app/build/outputs/apk/release/*.apk
+            VERSION
+
+      - name: Attach to version release (tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            android/app/build/outputs/apk/release/*.apk
+            VERSION

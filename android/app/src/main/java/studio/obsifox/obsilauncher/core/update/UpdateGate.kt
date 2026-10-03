@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import studio.obsifox.obsilauncher.BuildConfig
 import studio.obsifox.obsilauncher.core.net.Http
+import studio.obsifox.obsilauncher.core.runtime.ObsiComponents
 import studio.obsifox.obsilauncher.core.runtime.RuntimePacks
 import java.io.File
 
@@ -19,7 +20,10 @@ import java.io.File
  *     one is published in the repo's `runtime.json` (no questions asked);
  *  3. hands control to the launcher shell.
  *
- * Everything runs silently; failures are shown as calm, retryable states.
+ * v1.13.2: failures are never silent any more — every check failure carries
+ * its reason in [lastError] / [Step.UpdateCheckFailed], the version check
+ * primary source is the quota-free static VERSION asset, and the runtime
+ * fallback loop only asks for runtimes that are actually downloadable.
  */
 class UpdateGate(private val context: Context, private val runtimePacks: RuntimePacks) {
 
@@ -30,6 +34,8 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
         data class DownloadingUpdate(val done: Long, val total: Long) : Step()
         data object UpdateReady : Step()
         data object UpdateFailed : Step()
+        /** the release server could not be reached — shown briefly, then the runtime stage runs */
+        data class UpdateCheckFailed(val reason: String) : Step()
         data object CheckingRuntime : Step()
         data class InstallingRuntime(val fraction: Float?) : Step()
         data object RuntimeMissing : Step()
@@ -40,7 +46,21 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
     val step = MutableStateFlow<Step>(Step.Idle)
     val updateApk = MutableStateFlow<File?>(null)
 
+    /** human-readable cause of the last failure (update check, APK download or runtime install) */
+    var lastError: String? = null
+        private set
+
+    private var pendingTag: String? = null
+
     private fun repoApiLatest() = "https://api.github.com/repos/obsifox/ObsiLauncher-Source/releases/latest"
+
+    /**
+     * Primary version-check source: the VERSION file attached to the latest
+     * release. It is a plain static asset — no 60 req/h REST quota, no rate
+     * limits on busy days. The REST API is only the fallback.
+     */
+    private fun versionStaticUrl() =
+        "https://github.com/obsifox/ObsiLauncher-Source/releases/latest/download/VERSION"
 
     /** Full gate run. Always finishes in [Step.Ready], [RuntimeMissing] or [RuntimeFailed]. */
     suspend fun run(skipUpdate: Boolean = false) = withContext(Dispatchers.IO) {
@@ -48,133 +68,144 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
         if (!skipUpdate) {
             step.value = Step.CheckingUpdate
             try {
-                val text = Http.get(repoApiLatest())
-                if (text != null) {
-                    val json = JSONObject(text)
-                    val tag = json.optString("tag_name").removePrefix("v")
-                    if (isNewer(tag, BuildConfig.VERSION_NAME)) {
-                        step.value = Step.UpdateAvailable(
-                            tag,
-                            json.optString("name").ifBlank { "ObsiLauncher $tag" },
-                        )
-                        return@withContext // wait for the user to grab it or continue
-                    }
+                val tag = readLatestTag()
+                pendingTag = tag
+                if (isNewer(tag, BuildConfig.VERSION_NAME)) {
+                    step.value = Step.UpdateAvailable(tag, releaseNotes(tag))
+                    return@withContext // wait for the user to grab it or continue
                 }
-            } catch (_: Exception) {
-                // offline: the gate never blocks the launcher for this
+            } catch (e: Exception) {
+                // offline / throttled: the gate shows WHY and moves on to the runtime
+                lastError = e.message ?: e.toString()
+                step.value = Step.UpdateCheckFailed(lastError ?: "unknown error")
+                return@withContext // UpdateGateScreen shows it ~1.6 s, then calls checkRuntime()
             }
         }
 
         checkRuntime()
     }
 
+    /**
+     * Latest release tag: static VERSION asset first (no quota), REST API as
+     * fallback. Throws with the real reason when both fail.
+     */
+    private suspend fun readLatestTag(): String = withContext(Dispatchers.IO) {
+        try {
+            Http.get(versionStaticUrl()).trim().removePrefix("v")
+        } catch (e: Http.RateLimited) {
+            throw e
+        } catch (_: Exception) {
+            val text = Http.get(repoApiLatest()) // propagates the true failure
+            JSONObject(text).optString("tag_name").removePrefix("v")
+        }
+    }
+
+    /** release name/notes for the banner — best effort, never throws */
+    private suspend fun releaseNotes(tag: String): String = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject(Http.get(repoApiLatest()))
+            json.optString("name").ifBlank { "ObsiLauncher $tag" }
+        } catch (_: Exception) {
+            "ObsiLauncher $tag"
+        }
+    }
+
     /** ---- 2. runtime / JVM ------------------------------------------------ */
     suspend fun checkRuntime() = withContext(Dispatchers.IO) {
         step.value = Step.CheckingRuntime
+        lastError = null
 
-        // v1.13.0 — the gate now verifies the SAME store the game boots from:
+        // v1.13.0 — the gate verifies the SAME store the game boots from:
         // ObsiComponents' Internal-* JREs (the old check validated the separate
         // RuntimePacks store the JVM never reads — the reported "JVM won't
         // open" stemmed from exactly this split).
         runtimePacks.rescan() // keep the advanced pack shelf in sync (settings)
-        studio.obsifox.obsilauncher.core.runtime.ObsiComponents.ensureBundledRuntime(context)
-        if (studio.obsifox.obsilauncher.core.runtime.ObsiComponents
-                .installedRuntimeName(context, 21) != null
-        ) {
+
+        var bundledCause: String? = null
+        ObsiComponents.ensureBundledRuntime(context)
+            .onFailure { bundledCause = it.message ?: it.toString() }
+        if (bundledCause == null && ObsiComponents.installedRuntimeName(context, 21) != null) {
             step.value = Step.Ready
             return@withContext
         }
 
         // ---- auto-provision, no questions asked ----------------------------
-        // the bundled Internal-21 failed to unpack — try the catalog runtimes
-        var lastError: Exception? = null
-        for (id in listOf("jre-21", "jre-17", "jre-25")) {
+        // the bundled Internal-21 failed to unpack — try the DOWNLOADABLE
+        // catalog runtimes only. jre-21 is not downloadable (it ships in the
+        // APK): asking for it used to yield a silent `false` and the user
+        // unknowingly landed on Internal-17.
+        var lastFailure: Exception? = null
+        for (id in DOWNLOADABLE_RUNTIME_IDS) {
             try {
                 step.value = Step.InstallingRuntime(null)
-                if (studio.obsifox.obsilauncher.core.runtime.ObsiComponents.downloadRuntime(context, id)) {
+                val ok = ObsiComponents.downloadRuntime(context, id, manifestMirrors(id))
+                if (ok) {
                     step.value = Step.Ready
                     return@withContext
                 }
+                lastFailure = IllegalStateException(ObsiComponents.message.value ?: "runtime $id download failed")
             } catch (e: Exception) {
-                lastError = e
+                lastFailure = e
             }
         }
+        lastError = lastFailure?.message ?: bundledCause
         step.value = if (lastError != null) Step.RuntimeFailed else Step.RuntimeMissing
     }
 
     /**
-     * Runtime download links, resolved from what the app carries inside:
-     *  1. the repo's runtime.json (so links can be fixed without an update)
-     *  2. the BUILT-IN catalog below — known open-source Android JRE builds
-     *     (PojavLauncher-family, GPL) resolved through the GitHub API.
+     * Runtime mirror bases for [id], read from the repo's runtime.json (v2).
+     * The manifest exists so links can be fixed without an app update — and
+     * the list is REALLY handed to the installer now. Returns null when the
+     * manifest is unreachable/legacy and the installer should use its
+     * built-in pinned mirrors.
      */
-    private suspend fun resolveRuntimeUrls(): List<String> {
-        val urls = mutableListOf<String>()
-        runCatching {
-            val manifest = JSONObject(Http.get(RUNTIME_MANIFEST_URL) ?: return@runCatching)
-            val packs = manifest.optJSONArray("packs") ?: return@runCatching
-            for (i in 0 until packs.length()) {
-                val p = packs.optJSONObject(i) ?: continue
-                val url = p.optString("url")
-                if (url.isNotBlank() && p.optString("abi", "arm64-v8a") == "arm64-v8a") urls += url
-            }
-        }
-        if (urls.isEmpty()) urls += builtinRuntimeUrls()
-        return urls
-    }
-
-    /**
-     * The built-in catalog: queries the openjdk-for-android releases feed and
-     * returns every arm64 JRE 21/17 asset it publishes, newest first. Falls
-     * back to the pinned direct links when the API is unreachable.
-     */
-    private suspend fun builtinRuntimeUrls(): List<String> = withContext(Dispatchers.IO) {
-        val direct = listOf(
-            // pinned fallbacks (jre builds published for the PojavLauncher family)
-            "https://github.com/PojavLauncherTeam/android-openjdk-build-multiarch/releases/download/jre21-2023/jre21-arm64-2023-10-24.tar.xz",
-            "https://github.com/PojavLauncherTeam/android-openjdk-build-multiarch/releases/download/jre17-2023/jre17-arm64-2023-02-04.tar.xz",
-        )
-        try {
-            val text = Http.get(OPENJDK_RELEASES_API) ?: return@withContext direct
-            val arr = org.json.JSONArray(text)
-            val found = mutableListOf<String>()
+    private fun manifestMirrors(id: String): List<String>? {
+        return try {
+            val text = Http.getOrNull(RUNTIME_MANIFEST_URL) ?: return null
+            val root = JSONObject(text)
+            if (root.optInt("version", 1) < 2) return null
+            val entry = root.optJSONObject("runtimes")?.optJSONObject(id)
+            val arr = entry?.optJSONArray("mirrors")
+                ?: root.optJSONObject("defaults")?.optJSONArray("mirrors")
+                ?: return null
+            val urls = mutableListOf<String>()
             for (i in 0 until arr.length()) {
-                val rel = arr.optJSONObject(i) ?: continue
-                val assets = rel.optJSONArray("assets") ?: continue
-                for (j in 0 until assets.length()) {
-                    val a = assets.optJSONObject(j) ?: continue
-                    val name = a.optString("name").lowercase()
-                    val url = a.optString("browser_download_url")
-                    if (url.isBlank()) continue
-                    val archOk = name.contains("arm64") || name.contains("aarch64")
-                    val jreOk = name.contains("jre") && (name.contains("jre21") || name.contains("21") || name.contains("17"))
-                    if (archOk && jreOk && (name.endsWith(".tar.xz") || name.endsWith(".tar.gz"))) found += url
-                }
-                if (found.size >= 3) break
+                val u = arr.optString(i)
+                if (u.isNotBlank()) urls += u
             }
-            found.ifEmpty { direct }
+            urls.ifEmpty { null }
         } catch (_: Exception) {
-            direct
+            null
         }
     }
 
     /** ---- 3. one-tap self-update ----------------------------------------- */
     suspend fun downloadUpdate() = withContext(Dispatchers.IO) {
         try {
-            val text = Http.get(repoApiLatest()) ?: throw IllegalStateException("no release info")
-            val assets = JSONObject(text).optJSONArray("assets")
+            val tag = pendingTag ?: run {
+                val text = Http.get(repoApiLatest())
+                JSONObject(text).optString("tag_name").removePrefix("v")
+            }
+            // resolve the exact asset name via the API when it answers…
             var url: String? = null
-            if (assets != null) {
-                for (i in 0 until assets.length()) {
-                    val a = assets.optJSONObject(i) ?: continue
-                    val name = a.optString("name")
-                    if (name.endsWith(".apk") && name.contains("arm64")) {
-                        url = a.optString("browser_download_url")
-                        break
+            try {
+                val assets = JSONObject(Http.get(repoApiLatest())).optJSONArray("assets")
+                if (assets != null) {
+                    for (i in 0 until assets.length()) {
+                        val a = assets.optJSONObject(i) ?: continue
+                        val name = a.optString("name")
+                        if (name.endsWith(".apk") && name.contains("arm64")) {
+                            url = a.optString("browser_download_url")
+                            break
+                        }
                     }
                 }
+            } catch (_: Exception) {
+                // …and fall through to the predictable static URL when it doesn't
             }
-            val apkUrl = url ?: throw IllegalStateException("no arm64 APK in the release")
+            // releases/download is a stable pattern: no API quota, no surprise renames
+            val apkUrl = url
+                ?: "https://github.com/obsifox/ObsiLauncher-Source/releases/download/v$tag/ObsiLauncher-$tag-arm64-v8a.apk"
             val dest = File(context.getExternalFilesDir(null) ?: context.filesDir, "update.apk")
             step.value = Step.DownloadingUpdate(0, 0)
             Http.downloadToFile(apkUrl, dest) { done, total ->
@@ -182,7 +213,8 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
             }
             updateApk.value = dest
             step.value = Step.UpdateReady
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            lastError = e.message ?: e.toString()
             step.value = Step.UpdateFailed
         }
     }
@@ -196,9 +228,12 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
         const val RUNTIME_MANIFEST_URL =
             "https://raw.githubusercontent.com/obsifox/ObsiLauncher-Source/main/runtime.json"
 
-        /** the open-source Android JRE builds the built-in catalog resolves */
-        const val OPENJDK_RELEASES_API =
-            "https://api.github.com/repos/PojavLauncherTeam/android-openjdk-build-multiarch/releases?per_page=30"
+        /**
+         * The gate's auto-provision loop ONLY tries runtimes the installer can
+         * actually download. (jre-21 ships inside the APK; requesting it from
+         * downloadRuntime used to return a silent false.)
+         */
+        val DOWNLOADABLE_RUNTIME_IDS = listOf("jre-17", "jre-25")
 
         /** semantic-ish comparison: 1.10.0 > 1.9.9 */
         fun isNewer(candidate: String, current: String): Boolean {
