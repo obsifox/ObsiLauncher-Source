@@ -109,8 +109,16 @@ class GameManager(private val settings: ObsiSettings) {
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
                 // game log: latestlog.txt + console listener (vendored stdio_is)
-                Paths.gameLog(app).delete()
-                Logger.begin(Paths.gameLog(app).absolutePath)
+                // v1.13.1 FIX (the exit-code -1 root cause): the native begin()
+                // opens the log with O_TRUNC *without* O_CREAT, so the file MUST
+                // exist first — Zalith does createNewFile() for exactly this
+                // reason. Deleting it and calling begin() threw IOException
+                // before the JVM ever booted, every single launch.
+                val logFile = Paths.gameLog(app)
+                logFile.delete()
+                logFile.parentFile?.mkdirs()
+                logFile.createNewFile()
+                Logger.begin(logFile.absolutePath)
                 Logger.setLogListener { text -> appendLog(text + "\n") }
 
                 val account = sessionAccount ?: throw IllegalStateException("no account")
@@ -151,6 +159,20 @@ class GameManager(private val settings: ObsiSettings) {
                 net.kdt.pojavlaunch.Tools.DIRNAME_HOME_JRE = dirnameJre // locateLibs must scan the SAME dir
                 val server = File(jreHome, "$dirnameJre/server/libjvm.so")
                 JREUtils.jvmLibraryPath = jreHome + "/" + dirnameJre + "/" + if (server.exists()) "server" else "client"
+                // v1.13.1 — pre-boot self-check: the exact files JLI_Launch needs,
+                // logged so a runtime-layout problem is visible in the crash dialog
+                appendLog("Runtime home: $jreHome (libs: $dirnameJre)\n")
+                val jliLib = File(jreHome, "$dirnameJre/jli/libjli.so")
+                    .takeIf { it.isFile } ?: File(jreHome, "$dirnameJre/libjli.so")
+                appendLog(
+                    "libjli.so: ${if (jliLib.isFile) "ok" else "MISSING"} — " +
+                        "libjvm.so: ${if (server.exists()) "ok" else "MISSING"}\n"
+                )
+                if (!jliLib.isFile || !server.exists()) {
+                    throw IllegalStateException(
+                        "runtime '$runtimeName' is broken (libjli/libjvm missing) — reinstall it from Settings → Components"
+                    )
+                }
                 JREUtils.setLdLibPath(
                     jreHome + "/" + dirnameJre + "/jli:" +
                         JREUtils.jvmLibraryPath + ":" +
@@ -210,12 +232,26 @@ class GameManager(private val settings: ObsiSettings) {
                 exitCode.value = code
                 state.value = GameState.EXITED
                 running.value = null
-                ObsiGameExit.onGameExit(app, code, false)
+                // v1.13.1 — give the stdio pipe's logger thread a moment to drain
+                // the tail of the JVM output so the crash excerpt sees everything
+                Thread.sleep(200)
+                // excerpt source: the log FILE (JVM stdout/stderr). If it ended up
+                // with no content (the failure never printed anything), fall back
+                // to the in-memory console tail — it carries the header, the
+                // runtime self-check and the logcat-side dlopen/JLI diagnostics.
+                val fileText = Paths.gameLog(app).takeIf { it.isFile }?.readText().orEmpty()
+                val directExcerpt = if (fileText.isBlank()) log.value.takeLast(1200).ifBlank { null } else null
+                ObsiGameExit.onGameExit(app, code, false, directExcerpt = directExcerpt)
                 // nominal_exit normally restarts the process before we get here;
                 // if the JVM returned cleanly we restart manually for a clean shell
                 Process.killProcess(Process.myPid())
             } catch (e: Throwable) {
-                appendLog("!! ObsiLauncher launch error: ${e.message}\n")
+                // v1.13.1 — the excerpt in the crash dialog comes from the log
+                // FILE, and the pipe drains asynchronously: a boot failure could
+                // therefore show a generic message instead of the real error.
+                // Carry the exact reason directly into the crash report.
+                val reason = "${e.javaClass.simpleName}: ${e.message ?: "unknown error"}"
+                appendLog("!! ObsiLauncher launch error: $reason\n")
                 e.printStackTrace()
                 if (startedAt > 0) {
                     sessionEvents?.onSessionEnd(instance.id, (System.currentTimeMillis() - startedAt) / 1000)
@@ -225,7 +261,10 @@ class GameManager(private val settings: ObsiSettings) {
                 running.value = null
                 // v1.13.0 — a boot failure is a crash too: persist the marker and
                 // surface the crash dialog (the game JVM itself never opened)
-                ObsiGameExit.onGameExit(app, -1, false)
+                ObsiGameExit.onGameExit(
+                    app, -1, false,
+                    directExcerpt = "The game could not start.\n\nError: $reason\n\nIf this repeats, reinstall the runtime from Settings → Components."
+                )
             }
         }
     }

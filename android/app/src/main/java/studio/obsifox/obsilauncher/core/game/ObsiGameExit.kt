@@ -30,10 +30,13 @@ object ObsiGameExit {
     val lastExit: StateFlow<Exit?> = _lastExit
 
     @JvmStatic
-    fun onGameExit(context: Context, code: Int, isSignal: Boolean) {
+    @JvmOverloads
+    fun onGameExit(context: Context, code: Int, isSignal: Boolean, directExcerpt: String? = null) {
         runCatching {
-            val log = Paths.gameLog(context)
-            val excerpt = CrashParser.extract(log)
+            // v1.13.1 — a direct excerpt (boot failure, empty JVM output) always
+            // wins: the log FILE can still be empty because the stdio pipe
+            // drains asynchronously on the logger thread.
+            val excerpt = directExcerpt ?: CrashParser.extract(Paths.gameLog(context), context)
             val exit = Exit(code, isSignal, excerpt, GameManager.lastInstanceId, GameManager.lastVersionId)
             // persist: the process restarts right after this; the shell reads the marker
             Paths.exitMarker(context).writeText(
@@ -72,14 +75,30 @@ object ObsiGameExit {
 
 /**
  * Pulls the human-readable crash reason out of the game log: the Minecraft
- * "The game crashed whilst …" line plus the top exception frames, or the
- * last exception-looking block as a fallback.
+ * "The game crashed whilst …" line plus the top exception frames, the JVM
+ * bootstrap errors (bad args / broken runtime), or the newest Minecraft
+ * crash-report file as a last resort.
  */
 object CrashParser {
     private val DESC = Regex("The game crashed whilst (.+)")
     private val EXC = Regex("^(?:Caused by:\\s+)?([\\w.$]+(?:Exception|Error|Throwable)[\\w.$]*)[:\\s]?.*")
 
-    fun extract(logFile: File): String {
+    // v1.13.1 — JVM / bootstrap-level failures that never reach Minecraft's
+    // crash handler but ARE printed to stderr by the launcher or the JVM
+    private val BOOT = listOf(
+        "Error: Could not create the Java Virtual Machine",
+        "Error occurred during initialization of VM",
+        "Error: Could not find or load main class",
+        "Unrecognized option:",
+        "Could not reserve enough space",
+        "Could not find or load main class",
+        "JLI lib = NULL",
+        "JLI_Launch = NULL",
+        "Fatal error",
+        "hs_err",
+    )
+
+    fun extract(logFile: File, context: android.content.Context? = null): String {
         val text = if (logFile.isFile) runCatching { logFile.readText() }.getOrDefault("") else ""
         if (text.isBlank()) return "The game closed without reporting an error."
         val lines = text.lines()
@@ -89,7 +108,15 @@ object CrashParser {
         val descLine = lines.lastOrNull { DESC.containsMatchIn(it) }
         if (descLine != null) out.appendLine(descLine.trim()).appendLine()
 
-        // 2) first meaningful exception chain (up to 8 lines)
+        // 2) JVM / bootstrap-level errors (v1.13.1)
+        for (pattern in BOOT) {
+            lines.firstOrNull { it.contains(pattern) }?.let {
+                out.appendLine(it.trim())
+                break
+            }
+        }
+
+        // 3) first meaningful exception chain (up to 8 lines)
         var count = 0
         var started = false
         for (line in lines) {
@@ -97,7 +124,7 @@ object CrashParser {
             val isExc = EXC.containsMatchIn(l) && !l.startsWith("at ")
             if (isExc) {
                 started = true
-                if (count == 0) out.appendLine("Error:")
+                if (count == 0 && descLine == null) out.appendLine("Error:")
                 if (count > 0) out.appendLine()
                 out.appendLine(l)
                 count++
@@ -112,10 +139,29 @@ object CrashParser {
             }
         }
         if (out.isBlank()) {
-            // fallback: last 12 non-empty log lines
-            val tail = lines.filter { it.isNotBlank() }.takeLast(12)
+            // fallback: newest Minecraft crash report file, else the log tail
+            if (context != null) newestCrashReport(context)?.let { return it }
+            val tail = lines.filter { it.isNotBlank() }.takeLast(15)
             return tail.joinToString("\n").ifBlank { "An unexpected critical error was encountered" }
         }
         return out.toString().trim()
+    }
+
+    /** v1.13.1 — Minecraft writes full reports to <game dir>/crash-reports/. */
+    private fun newestCrashReport(context: android.content.Context): String? {
+        val versionId = GameManager.lastVersionId ?: return null
+        val reports = runCatching {
+            val vdir = studio.obsifox.obsilauncher.core.Paths.versionDir(context, versionId)
+            val gameDir = File(vdir, "game").takeIf { it.isDirectory } ?: vdir
+            File(gameDir, "crash-reports")
+                .takeIf { it.isDirectory }
+                ?.listFiles { f -> f.name.endsWith(".txt") }
+                ?.sortedBy { it.lastModified() }
+        }.getOrNull().orEmpty()
+        val newest = reports.lastOrNull() ?: return null
+        return runCatching {
+            "Report saved to crash-reports/${newest.name}\n\n" +
+                newest.readLines().filter { it.isNotBlank() }.take(12).joinToString("\n")
+        }.getOrNull()
     }
 }

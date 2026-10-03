@@ -150,8 +150,28 @@ object LaunchPipeline {
             jvm += "-Dext.net.resolvPath=${resolv.absolutePath}"
         }
 
-        // java args the user typed on the instance / settings, parsed crudely
-        req.extraJvmArgs.filter { it.isNotBlank() }.forEach { jvm += it }
+        // v1.13.1 — Zalith parity: timezone + locale come from the device (the
+        // JVM on Android has no TZ env to read), and authlib-injector needs the
+        // private-account dir that pojav.path.private.account points to
+        jvm += "-Duser.timezone=${java.util.TimeZone.getDefault().id}"
+        jvm += "-Duser.language=${java.util.Locale.getDefault().language}"
+        jvm += "-Duser.country=${java.util.Locale.getDefault().country}"
+        jvm += "-Dpojav.path.private.account=${context.filesDir.resolve("obsi/accounts").absolutePath}"
+
+        // java args the user typed on the instance / settings — v1.13.1: purge
+        // the ones we control ourselves (Zalith purgeArg parity: a duplicated
+        // -Xmx / renderer flag would fight the generated ones)
+        val purged = req.extraJvmArgs.filter { arg ->
+            val a = arg.trim()
+            val overridden = a.startsWith("-Xms") || a.startsWith("-Xmx") || a.startsWith("-Xint") ||
+                a.startsWith("-d32") || a.startsWith("-d64") ||
+                a.startsWith("-XX:ActiveProcessorCount") ||
+                a.startsWith("-XX:+UseTransparentHugePages") || a.startsWith("-XX:+UseLargePages") ||
+                a.startsWith("-Dorg.lwjgl.opengl.libname") || a.startsWith("-Dorg.lwjgl.freetype.libname") ||
+                a.startsWith("-Djava.library.path") || a.startsWith("-Djna.boot.library.path")
+            !overridden
+        }
+        purged.filter { it.isNotBlank() }.forEach { jvm += it }
 
         // MIO lib patcher (vendor parity: fixes sodium/misc native loading)
         val mio = File(componentDir(context, ObsiComponents.COMPONENTS), "MioLibPatcher.jar")
@@ -315,10 +335,17 @@ object LaunchPipeline {
         val versionDir = Paths.versionDir(context, versionId)
         val gameDir = File(versionDir, "game").takeIf { it.isDirectory } ?: versionDir
         val nativeAppDir = appNativeDir(context)
+        val dirnameJre = ToolsHome.dirNameHomeJre(jreHome)
+        val serverDir = File(jreHome, "$dirnameJre/server")
         val libDirs = ArrayList<String>()
+        // v1.13.1 — Zalith initLdLibraryPath parity: the server dir (libjvm.so)
+        // goes FIRST in the env var (forked children like jspawnhelper inherit
+        // this exact string), then jli, then the JRE lib dir, system dirs, and
+        // our own natives last
+        if (serverDir.isDirectory) libDirs += serverDir.absolutePath
+        libDirs += jreHome + "/" + dirnameJre + "/jli"
+        libDirs += jreHome + "/" + dirnameJre
         libDirs += nativesDir(context, versionId).absolutePath
-        libDirs += jreHome + "/" + ToolsHome.dirNameHomeJre(jreHome) + "/jli"
-        libDirs += jreHome + "/" + ToolsHome.dirNameHomeJre(jreHome)
         libDirs += nativeAppDir
         val ldPath = libDirs.joinToString(":") + ":/system/lib64:/vendor/lib64"
         return listOf(
