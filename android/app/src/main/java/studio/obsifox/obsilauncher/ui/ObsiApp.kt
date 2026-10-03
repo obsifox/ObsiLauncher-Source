@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import studio.obsifox.obsilauncher.R
 import studio.obsifox.obsilauncher.app
+import studio.obsifox.obsilauncher.ui.gate.UpdateGateScreen
 import studio.obsifox.obsilauncher.ui.screens.AboutScreen
 import studio.obsifox.obsilauncher.ui.screens.AccountsScreen
 import studio.obsifox.obsilauncher.ui.screens.BrowseScreen
@@ -91,6 +92,13 @@ fun ObsiApp() {
     val setupDone by app.settings.setupDone.collectAsState()
     if (!setupDone) {
         SetupWizard()
+        return
+    }
+
+    // every open: the update gate checks updates + runtime before the shell
+    var gatePassed by remember { mutableStateOf(false) }
+    if (!gatePassed) {
+        UpdateGateScreen(onEnter = { gatePassed = true })
         return
     }
 

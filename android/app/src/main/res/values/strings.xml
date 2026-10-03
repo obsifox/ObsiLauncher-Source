@@ -220,4 +220,37 @@
     <string name="last_min_ago">%1$d min ago</string>
     <string name="last_hour_ago">%1$d h ago</string>
     <string name="last_day_ago">%1$d d ago</string>
+
+    <!-- 1.7.0 update gate -->
+    <string name="gate_checking">Checking updates…</string>
+    <string name="gate_checking_sub">Talking to the release server</string>
+    <string name="gate_up_to_date">YOU ARE UP TO DATE</string>
+    <string name="gate_up_to_date_sub">No update found · preparing the runtime</string>
+    <string name="gate_update_available">UPDATE %1$s IS OUT</string>
+    <string name="gate_update_sub">A newer launcher build is available</string>
+    <string name="gate_downloading">DOWNLOADING %1$s</string>
+    <string name="gate_downloading_sub">Fetching the new launcher APK</string>
+    <string name="gate_update_ready">UPDATE DOWNLOADED</string>
+    <string name="gate_update_ready_sub">Open the installer to apply it</string>
+    <string name="gate_update_failed">UPDATE CHECK FAILED</string>
+    <string name="gate_update_failed_sub">Network trouble — you can retry or continue</string>
+    <string name="gate_runtime_checking">Checking runtime…</string>
+    <string name="gate_runtime_checking_sub">Verifying JVM and the runtime pack</string>
+    <string name="gate_runtime_installing">Installing runtime…</string>
+    <string name="gate_runtime_installing_sub">Fetching the JVM pack automatically</string>
+    <string name="gate_runtime_missing">RUNTIME NOT INSTALLED</string>
+    <string name="gate_runtime_missing_sub">Install a runtime pack from Settings → Runtime (or continue to browse)</string>
+    <string name="gate_runtime_failed">RUNTIME INSTALL FAILED</string>
+    <string name="gate_install_update">Install update</string>
+    <string name="gate_open_installer">Open installer</string>
+    <string name="gate_check_again">CHECK AGAIN</string>
+    <string name="gate_continue">CONTINUE TO LAUNCHER</string>
+
+    <!-- 1.7.0 mods popup -->
+    <string name="browse_search_title">Search Modrinth</string>
+    <string name="browse_search_type">What do you want?</string>
+    <string name="browse_search_version">Which game version? (optional)</string>
+    <string name="browse_search_any">Any</string>
+    <string name="browse_search_name">Name (optional)</string>
+    <string name="browse_search_name_hint">Leave empty to list top content</string>
 </resources>

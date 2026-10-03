@@ -1,0 +1,5 @@
+{
+  "_comment": "ObsiLauncher update-gate manifest. When the launcher starts and no runtime pack is installed, it downloads the first arm64-v8a pack listed here automatically (no prompt). Pack format: docs/RUNTIME-PACKS.md. Add a real pack URL to enable zero-touch runtime provisioning.",
+  "version": 1,
+  "packs": []
+}

@@ -11,6 +11,7 @@ import studio.obsifox.obsilauncher.core.instance.InstancesStore
 import studio.obsifox.obsilauncher.core.loaders.LoaderService
 import studio.obsifox.obsilauncher.core.modrinth.ModrinthInstaller
 import studio.obsifox.obsilauncher.core.runtime.RuntimePacks
+import studio.obsifox.obsilauncher.core.update.UpdateGate
 import studio.obsifox.obsilauncher.obsi.ObsiWallpaper
 
 /**
@@ -39,6 +40,8 @@ class App : Application() {
         private set
     lateinit var microsoft: MicrosoftAuth
         private set
+    lateinit var updateGate: UpdateGate
+        private set
 
     val gameManager: GameManager by lazy {
         GameManager(settings).also { gm ->
@@ -65,6 +68,7 @@ class App : Application() {
         loaders = LoaderService(this)
         modrinth = ModrinthInstaller(this)
         microsoft = MicrosoftAuth()
+        updateGate = UpdateGate(this, runtimePacks)
     }
 }
 

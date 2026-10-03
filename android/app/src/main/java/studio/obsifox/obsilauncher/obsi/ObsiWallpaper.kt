@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import studio.obsifox.obsilauncher.R
 import studio.obsifox.obsilauncher.core.BackgroundMode
 import studio.obsifox.obsilauncher.core.ObsiSettings
 import studio.obsifox.obsilauncher.core.Paths
@@ -60,7 +62,7 @@ sealed class VideoBg {
  */
 class ObsiWallpaper(private val context: Context, private val settings: ObsiSettings) {
 
-    data class Active(val isVideo: Boolean, val imagePath: String?)
+    data class Active(val isVideo: Boolean, val imagePath: String?, val resId: Int? = null)
 
     val active = MutableStateFlow(Active(isVideo = false, imagePath = null))
     val accent = MutableStateFlow(0xFFFF8A3D.toInt())
@@ -103,7 +105,9 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
             val packDir = packForVersion(versionId, latest)
             val artwork = ensureArtwork(packDir, versionId)
             if (artwork == null) {
-                publish(Active(false, null), accent.value)
+                // minecraft.net unreachable / no packs yet: always show SOMETHING —
+                // the bundled era artwork keeps the launcher alive offline
+                publish(Active(false, null, bundledArtFor(versionId)), accent.value)
                 return@withContext
             }
             publish(Active(false, artwork.absolutePath), extractAccent(artwork))
@@ -271,6 +275,28 @@ class ObsiWallpaper(private val context: Context, private val settings: ObsiSett
     }
 }
 
+/** Bundled offline artwork for a version era — background + version cards. */
+fun bundledArtFor(mcVersion: String?): Int = when {
+    isAtLeastRef(mcVersion, "1.20") -> R.drawable.art_cherry
+    isAtLeastRef(mcVersion, "1.18") -> R.drawable.art_snow
+    isAtLeastRef(mcVersion, "1.13") -> R.drawable.art_wilderness
+    else -> R.drawable.art_legacy
+}
+
+private fun isAtLeastRef(mcVersion: String?, ref: String): Boolean {
+    if (mcVersion == null) return false
+    fun nums(v: String) = v.substringBefore('-').split('.')
+        .map { part -> part.filter(Char::isDigit).take(3).ifEmpty { "0" }.toIntOrNull() ?: 0 }
+    val a = nums(mcVersion)
+    val b = nums(ref)
+    for (i in 0 until maxOf(a.size, b.size)) {
+        val x = a.getOrElse(i) { 0 }
+        val y = b.getOrElse(i) { 0 }
+        if (x != y) return x > y
+    }
+    return true
+}
+
 /**
  * The full-screen backdrop: the looping trailer when [ObsiWallpaper.Active.isVideo]
  * is set, otherwise the version wallpaper with blur + scrims.
@@ -303,6 +329,18 @@ fun ObsiWallpaperLayer(wallpaper: ObsiWallpaper, blurPx: Int, modifier: Modifier
                     )
                 }
             }
+        }
+        // bundled artwork branch (resId on the delegated value needs a local)
+        val resId = active.resId
+        if (!active.isVideo && active.imagePath == null && resId != null) {
+            Image(
+                painter = painterResource(resId),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (blurPx > 0) Modifier.blur(blurPx.dp()) else Modifier),
+            )
         }
         Box(
             Modifier

@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -129,8 +127,9 @@ fun AccountsScreen() {
                 Text(stringResourceCompat(R.string.accounts_empty), color = obsi.textDim)
             }
         } else {
-            LazyColumn(modifier = Modifier.padding(top = 14.dp)) {
-                items(accounts, key = { it.id }) { account ->
+            // plain Column — a LazyColumn nested in this scrollable Column crashes
+            Column(modifier = Modifier.padding(top = 14.dp)) {
+                accounts.forEach { account ->
                     AccountCard(
                         account = account,
                         active = account.id == activeId,

@@ -224,11 +224,13 @@ fun HomeScreen(
 /** The big bottom-right PLAY button from the reference design. */
 @Composable
 private fun PlayButton(enabled: Boolean, subtitle: String, onClick: () -> Unit) {
-    val obsi = LocalObsi.current
+    // clearly gray while disabled — the version must be installed first
+    val container = if (enabled) LocalObsi.current.accent else Color(0x64888888)
+    val contentColor = if (enabled) Color(0xFF17110B) else Color(0xFFDDDDDD)
     Column(
         Modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(if (enabled) obsi.accent else obsi.accentDim.copy(alpha = 0.3f))
+            .background(container)
             .clickable(enabled = enabled, onClick = onClick)
             .widthIn(min = 210.dp)
             .padding(horizontal = 30.dp, vertical = 12.dp),
@@ -239,13 +241,13 @@ private fun PlayButton(enabled: Boolean, subtitle: String, onClick: () -> Unit) 
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Black,
             letterSpacing = 3.sp,
-            color = Color(0xFF17110B),
+            color = contentColor,
         )
         if (subtitle.isNotBlank()) {
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFF17110B).copy(alpha = 0.75f),
+                color = contentColor.copy(alpha = 0.75f),
             )
         }
     }

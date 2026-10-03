@@ -1,15 +1,26 @@
 package studio.obsifox.obsilauncher.ui.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -25,22 +36,36 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import studio.obsifox.obsilauncher.R
 import studio.obsifox.obsilauncher.app
 import studio.obsifox.obsilauncher.core.game.InstallState
 import studio.obsifox.obsilauncher.core.game.McVersion
+import studio.obsifox.obsilauncher.core.instance.Instance
 import studio.obsifox.obsilauncher.core.loaders.LoaderType
+import studio.obsifox.obsilauncher.obsi.bundledArtFor
 import studio.obsifox.obsilauncher.ui.components.GlassCard
+import studio.obsifox.obsilauncher.ui.components.LoaderGlyph
 import studio.obsifox.obsilauncher.ui.components.ObsiButton
 import studio.obsifox.obsilauncher.ui.components.ObsiGhostButton
 import studio.obsifox.obsilauncher.ui.components.ObsiTextButton
 import studio.obsifox.obsilauncher.ui.components.ProgressRow
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
+/**
+ * Version picker as a GRID OF CARDS, each showing the artwork of that
+ * version's era; tapping a card opens a compact loader-icon picker where
+ * every loader name/version sits in an orange (accent) box with white text.
+ */
 @Composable
 fun VersionsScreen() {
     val context = LocalContext.current
@@ -74,18 +99,18 @@ fun VersionsScreen() {
     Column(modifier = Modifier.fillMaxWidth()) {
         TabRow(
             selectedTabIndex = tab,
-            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            containerColor = Color.Transparent,
             contentColor = obsi.accent,
         ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
                     selected = tab == index,
                     onClick = { tab = index },
-                    text = { Text(title) },
+                    text = { Text(title, style = MaterialTheme.typography.labelLarge) },
                 )
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
         when {
             installState is InstallState.Running -> InstallProgressCard(installState as InstallState.Running)
@@ -97,24 +122,24 @@ fun VersionsScreen() {
                     installState is InstallState.Done -> (installState as InstallState.Done).id
                     else -> (loaderState as InstallState.Done).id
                 }
-                GlassCard(modifier = Modifier.padding(bottom = 12.dp)) {
+                GlassCard(modifier = Modifier.padding(bottom = 10.dp)) {
                     Text(stringResourceCompat(R.string.dl_done, id), color = obsi.accent)
                 }
             }
         }
 
         when (tab) {
-            0 -> InstalledList(instances) { v ->
+            0 -> InstalledGrid(instances) { v ->
                 app.instances.setActive(v.id)
                 app.settings.selectedVersionValue = v.versionId
             }
-            1 -> RemoteList(releases, manifestLoading) { v -> loaderPick = v }
-            2 -> RemoteList(snapshots, manifestLoading) { v -> loaderPick = v }
-            3 -> RemoteList(old, manifestLoading) { v -> loaderPick = v }
+            1 -> RemoteGrid(releases, manifestLoading) { loaderPick = it }
+            2 -> RemoteGrid(snapshots, manifestLoading) { loaderPick = it }
+            3 -> RemoteGrid(old, manifestLoading) { loaderPick = it }
         }
     }
 
-    // step 1: choose the loader for this Minecraft version
+    // step 1: loader icons for this Minecraft version -------------------------
     loaderPick?.let { mc ->
         LoaderPickerDialog(
             mc = mc,
@@ -134,7 +159,7 @@ fun VersionsScreen() {
         )
     }
 
-    // step 2: choose the loader version
+    // step 2: loader version numbers (orange chips) ---------------------------
     loaderVersionPick?.let { (type, mc) ->
         LoaderVersionDialog(
             type = type,
@@ -155,6 +180,144 @@ fun VersionsScreen() {
     }
 }
 
+/** one version card: era artwork + version id + type. */
+@Composable
+private fun VersionCard(
+    title: String,
+    subtitle: String,
+    mcVersion: String,
+    selected: Boolean,
+    badge: String? = null,
+    onClick: () -> Unit,
+) {
+    val obsi = LocalObsi.current
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(1.7f)
+            .clip(RoundedCornerShape(14.dp))
+            .border(
+                1.5.dp,
+                if (selected) obsi.accent else Color(0x2EFFFFFF),
+                RoundedCornerShape(14.dp),
+            )
+            .clickable(onClick = onClick),
+    ) {
+        Image(
+            painter = painterResource(bundledArtFor(mcVersion)),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize(),
+        )
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0x14000000), Color(0xCC0B0908)),
+                    ),
+                ),
+        )
+        Column(Modifier.align(Alignment.BottomStart).padding(10.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFF4EFEA),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFB9AFA6),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (badge != null) {
+            Text(
+                badge,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(obsi.accent)
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun InstalledGrid(instances: List<Instance>, onSelect: (Instance) -> Unit) {
+    val context = LocalContext.current
+    val app = context.app
+    val obsi = LocalObsi.current
+    if (instances.isEmpty()) {
+        GlassCard { Text(stringResourceCompat(R.string.versions_empty_installed), color = obsi.textDim) }
+        return
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
+    ) {
+        items(instances, key = { it.id }) { instance ->
+            VersionCard(
+                title = instance.name,
+                subtitle = loaderBadge(instance),
+                mcVersion = instance.mcVersion,
+                selected = instance.id == app.instances.activeId.value,
+                badge = stringResourceCompat(R.string.versions_selected).takeIf {
+                    instance.id == app.instances.activeId.value
+                },
+                onClick = { onSelect(instance) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun RemoteGrid(
+    versions: List<McVersion>,
+    loading: Boolean,
+    onInstall: (McVersion) -> Unit,
+) {
+    val obsi = LocalObsi.current
+    if (versions.isEmpty()) {
+        GlassCard {
+            Text(
+                if (loading) "…" else stringResourceCompat(R.string.versions_empty_remote),
+                color = obsi.textDim,
+            )
+        }
+        return
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
+    ) {
+        items(versions, key = { it.id }) { v ->
+            VersionCard(
+                title = v.id,
+                subtitle = v.type + (v.releaseTime.takeIf { it.isNotEmpty() }
+                    ?.let { " · ${it.substring(0, 10)}" } ?: ""),
+                mcVersion = v.id,
+                selected = false,
+                onClick = { onInstall(v) },
+            )
+        }
+    }
+}
+
+/** loader picker as a single row of icon tiles with orange name chips. */
 @Composable
 private fun LoaderPickerDialog(
     mc: McVersion,
@@ -168,20 +331,49 @@ private fun LoaderPickerDialog(
         title = { Text(stringResourceCompat(R.string.loader_pick_title, mc.id)) },
         text = {
             Column {
-                Text(stringResourceCompat(R.string.loader_pick_hint), color = obsi.textDim, style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(10.dp))
-                listOf(LoaderType.VANILLA, LoaderType.FABRIC, LoaderType.FORGE, LoaderType.NEOFORGE, LoaderType.QUILT, LoaderType.OPTIFINE).forEach { type ->
-                    GlassCard(modifier = Modifier.padding(vertical = 4.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                Text(
+                    stringResourceCompat(R.string.loader_pick_hint),
+                    color = obsi.textDim,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(12.dp))
+                val loaders = listOf(
+                    LoaderType.VANILLA, LoaderType.FABRIC, LoaderType.FORGE,
+                    LoaderType.NEOFORGE, LoaderType.QUILT, LoaderType.OPTIFINE,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    loaders.forEach { type ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
                                 .clickable {
                                     if (type == LoaderType.VANILLA) onVanilla(mc) else onLoader(type)
-                                },
+                                }
+                                .padding(4.dp),
                         ) {
-                            Text(type.display, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Spacer(Modifier.height(0.dp))
+                            Box(
+                                Modifier
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(obsi.accentDim.copy(alpha = 0.4f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                LoaderGlyph(type = type, color = obsi.text, modifier = Modifier.size(28.dp))
+                            }
+                            Spacer(Modifier.height(5.dp))
+                            // loader name inside an orange box, white text
+                            Text(
+                                type.display,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(obsi.accent)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
                         }
                     }
                 }
@@ -233,15 +425,34 @@ private fun LoaderVersionDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { onPick(lv.version) }
-                                    .padding(vertical = 8.dp),
+                                    .padding(vertical = 6.dp),
                             ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(lv.version, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                    if (lv.recommended) {
-                                        Text(stringResourceCompat(R.string.loader_recommended), style = MaterialTheme.typography.labelMedium, color = obsi.accent)
-                                    } else if (!lv.stable) {
-                                        Text(stringResourceCompat(R.string.loader_unstable), style = MaterialTheme.typography.labelMedium, color = obsi.textDim)
-                                    }
+                                // the loader number inside an orange box, white text
+                                Text(
+                                    lv.version,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    modifier = Modifier
+                                        .width(150.dp)
+                                        .clip(RoundedCornerShape(7.dp))
+                                        .background(obsi.accent)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                if (lv.recommended) {
+                                    Text(
+                                        stringResourceCompat(R.string.loader_recommended),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = obsi.accent,
+                                    )
+                                } else if (!lv.stable) {
+                                    Text(
+                                        stringResourceCompat(R.string.loader_unstable),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = obsi.textDim,
+                                    )
                                 }
                             }
                         }
@@ -259,7 +470,7 @@ private fun LoaderVersionDialog(
 private fun InstallProgressCard(state: InstallState.Running) {
     val obsi = LocalObsi.current
     val context = LocalContext.current
-    GlassCard(modifier = Modifier.padding(bottom = 12.dp)) {
+    GlassCard(modifier = Modifier.padding(bottom = 10.dp)) {
         val label = when (state.step) {
             "manifest" -> stringResourceCompat(R.string.dl_step_manifest)
             "client" -> stringResourceCompat(R.string.dl_step_client)
@@ -289,7 +500,7 @@ private fun InstallProgressCard(state: InstallState.Running) {
 @Composable
 private fun InstallFailedCard(state: InstallState.Failed) {
     val context = LocalContext.current
-    GlassCard(modifier = Modifier.padding(bottom = 12.dp)) {
+    GlassCard(modifier = Modifier.padding(bottom = 10.dp)) {
         Text(
             stringResourceCompat(R.string.dl_failed, state.message ?: "unknown"),
             style = MaterialTheme.typography.bodyMedium,
@@ -298,77 +509,5 @@ private fun InstallFailedCard(state: InstallState.Failed) {
             context.app.installer.state.value = InstallState.Idle
             context.app.loaders.state.value = InstallState.Idle
         })
-    }
-}
-
-@Composable
-private fun InstalledList(instances: List<studio.obsifox.obsilauncher.core.instance.Instance>, onSelect: (studio.obsifox.obsilauncher.core.instance.Instance) -> Unit) {
-    val context = LocalContext.current
-    val app = context.app
-    val obsi = LocalObsi.current
-    if (instances.isEmpty()) {
-        GlassCard { Text(stringResourceCompat(R.string.versions_empty_installed), color = obsi.textDim) }
-        return
-    }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(instances, key = { it.id }) { instance ->
-            GlassCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .clickable { onSelect(instance) },
-                    ) {
-                        Text(instance.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            loaderBadge(instance) + " · " + instance.versionId,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = obsi.textDim,
-                        )
-                    }
-                    ObsiGhostButton(
-                        stringResourceCompat(R.string.versions_delete),
-                        onClick = {
-                            app.instances.remove(instance.id)
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RemoteList(
-    versions: List<McVersion>,
-    loading: Boolean,
-    onInstall: (McVersion) -> Unit,
-) {
-    val obsi = LocalObsi.current
-    if (versions.isEmpty()) {
-        GlassCard {
-            Text(
-                if (loading) "…" else stringResourceCompat(R.string.versions_empty_remote),
-                color = obsi.textDim,
-            )
-        }
-        return
-    }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(versions, key = { it.id }) { v ->
-            GlassCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(v.id, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            v.type + (v.releaseTime.takeIf { it.isNotEmpty() }?.let { " · ${it.substring(0, 10)}" } ?: ""),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = obsi.textDim,
-                        )
-                    }
-                    ObsiButton(stringResourceCompat(R.string.versions_install), onClick = { onInstall(v) })
-                }
-            }
-        }
     }
 }

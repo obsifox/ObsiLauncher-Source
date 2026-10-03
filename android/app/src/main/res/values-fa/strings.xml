@@ -220,4 +220,37 @@
     <string name="last_min_ago">‏%1$d دقیقه پیش</string>
     <string name="last_hour_ago">‏%1$d ساعت پیش</string>
     <string name="last_day_ago">‏%1$d روز پیش</string>
+
+    <!-- 1.7.0 دروازه به‌روزرسانی -->
+    <string name="gate_checking">بررسی به‌روزرسانی…</string>
+    <string name="gate_checking_sub">ارتباط با سرور انتشار</string>
+    <string name="gate_up_to_date">بروز هستید</string>
+    <string name="gate_up_to_date_sub">به‌روزرسانی پیدا نشد · آماده‌سازی ران‌تایم</string>
+    <string name="gate_update_available">نسخه %1$s منتشر شده است</string>
+    <string name="gate_update_sub">نسخه جدیدتری از لانچر موجود است</string>
+    <string name="gate_downloading">در حال دانلود %1$s</string>
+    <string name="gate_downloading_sub">دریافت APK جدید لانچر</string>
+    <string name="gate_update_ready">به‌روزرسانی دانلود شد</string>
+    <string name="gate_update_ready_sub">نصب‌کننده را باز کنید تا اعمال شود</string>
+    <string name="gate_update_failed">بررسی به‌روزرسانی ناموفق بود</string>
+    <string name="gate_update_failed_sub">مشکل شبکه — دوباره تلاش کنید یا ادامه دهید</string>
+    <string name="gate_runtime_checking">بررسی ران‌تایم…</string>
+    <string name="gate_runtime_checking_sub">بررسی JVM و پک ران‌تایم</string>
+    <string name="gate_runtime_installing">نصب ران‌تایم…</string>
+    <string name="gate_runtime_installing_sub">دریافت خودکار پک JVM</string>
+    <string name="gate_runtime_missing">ران‌تایم نصب نیست</string>
+    <string name="gate_runtime_missing_sub">پک ران‌تایم را از تنظیمات ← ران‌تایم نصب کنید (یا برای مرور ادامه دهید)</string>
+    <string name="gate_runtime_failed">نصب ران‌تایم ناموفق بود</string>
+    <string name="gate_install_update">نصب به‌روزرسانی</string>
+    <string name="gate_open_installer">باز کردن نصب‌کننده</string>
+    <string name="gate_check_again">بررسی دوباره</string>
+    <string name="gate_continue">ورود به لانچر</string>
+
+    <!-- 1.7.0 پاپ‌آپ مادها -->
+    <string name="browse_search_title">جستجوی مادرینث</string>
+    <string name="browse_search_type">چه چیزی می‌خواهید؟</string>
+    <string name="browse_search_version">کدام نسخه بازی؟ (اختیاری)</string>
+    <string name="browse_search_any">همه</string>
+    <string name="browse_search_name">نام (اختیاری)</string>
+    <string name="browse_search_name_hint">خالی بگذارید تا برترین‌ها نمایش داده شود</string>
 </resources>
