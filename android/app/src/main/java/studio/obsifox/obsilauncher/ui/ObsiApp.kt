@@ -65,6 +65,53 @@ private val TopTabs = listOf(Screen.HOME, Screen.VERSIONS, Screen.BROWSE, Screen
 /** Height of the floating top bar (content below it starts here when not HOME). */
 val TopBarSpace = 68.dp
 
+/**
+ * v1.9.0 — the shared launch routine, used by the PLAY button and by the
+ * automatic launch after a download finishes. Refreshes Microsoft tokens
+ * when they are close to expiry, then spawns the game and reports back.
+ */
+internal suspend fun launchGame(
+    context: android.content.Context,
+    app: studio.obsifox.obsilauncher.App,
+    onStarted: () -> Unit,
+) {
+    var account = app.accounts.active()
+    if (account?.isMicrosoft == true &&
+        account.tokenExpiresAt < System.currentTimeMillis() + 10 * 60_000L
+    ) {
+        try {
+            val refreshed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                app.microsoft.refresh(account.refreshToken)
+            }
+            app.accounts.upsertMicrosoft(
+                refreshed.name, refreshed.id, refreshed.accessToken,
+                refreshed.refreshToken, refreshed.expiresAtMs,
+            )
+            account = app.accounts.active()
+        } catch (_: Exception) {
+            // fall back to the stored token; the console shows auth errors
+        }
+    }
+    val instance = app.instances.active()
+    val pack = app.runtimePacks.packByName(app.settings.runtimePackValue)
+        ?: app.runtimePacks.packs.value.firstOrNull()
+    if (instance != null && account != null && pack != null) {
+        app.gameManager.launch(context, instance, account, pack)
+        onStarted()
+    }
+}
+
+/** v1.9.0 — downloads the version that is currently selected in settings (vanilla). */
+internal suspend fun startSelectedDownload(app: studio.obsifox.obsilauncher.App) {
+    val vid = app.settings.selectedVersionValue
+    if (vid.isBlank()) return
+    if (app.installer.state.value is studio.obsifox.obsilauncher.core.game.InstallState.Running) return
+    if (app.installer.isInstalled(vid)) return
+    val v = app.manifest.versions.value.firstOrNull { it.id == vid } ?: return
+    app.installer.install(v, app.settings)
+    app.instances.create(vid, vid, vid)
+}
+
 /** Secondary destinations on top of the tab bar. */
 sealed class Overlay {
     data object None : Overlay()
@@ -86,6 +133,41 @@ fun ObsiApp() {
     // wallpaper follows the active instance's version — always, wizard included
     LaunchedEffect(selected) {
         app.wallpaper.sync(selected.ifBlank { null })
+    }
+
+    // v1.9.0: on the very first setup the launcher pre-selects the LATEST
+    // Minecraft release (not downloaded yet) so the home button is a
+    // ready-to-press DOWNLOAD right away.
+    LaunchedEffect(Unit) {
+        if (app.settings.selectedVersionValue.isBlank()) {
+            app.manifest.refresh(force = false)
+            val latest = app.manifest.latest.value.release
+            if (latest.isNotBlank()) app.settings.selectedVersionValue = latest
+        } else {
+            app.manifest.refresh(force = false)
+        }
+    }
+
+    // ---- download flow (v1.9.0) --------------------------------------------
+    // a version download starting anywhere pulls the user back to the home
+    // screen, where the big button turns into a live DOWNLOAD progress pill;
+    // the moment the download finishes the game launches on its own.
+    val installState by app.installer.state.collectAsState()
+    val loaderInstallState by app.loaders.state.collectAsState()
+    LaunchedEffect(installState, loaderInstallState) {
+        val running = installState is studio.obsifox.obsilauncher.core.game.InstallState.Running ||
+            loaderInstallState is studio.obsifox.obsilauncher.core.game.InstallState.Running
+        if (running && screen != Screen.HOME) screen = Screen.HOME
+    }
+    LaunchedEffect(installState) {
+        val done = installState as? studio.obsifox.obsilauncher.core.game.InstallState.Done
+        if (done != null) {
+            val instance = app.instances.byVersion(done.id)
+                ?: app.instances.create(done.id, done.id, done.id)
+            app.instances.setActive(instance.id)
+            app.settings.selectedVersionValue = instance.versionId
+            launchGame(context, app) { overlay = Overlay.Console }
+        }
     }
 
     // first launch: the setup wizard replaces the whole launcher shell
@@ -117,31 +199,12 @@ fun ObsiApp() {
                     Screen.HOME -> HomeScreen(
                         onPlay = {
                             scope.launch {
-                                var account = app.accounts.active()
-                                // Microsoft tokens are refreshed silently when close to expiry
-                                if (account?.isMicrosoft == true &&
-                                    account.tokenExpiresAt < System.currentTimeMillis() + 10 * 60_000L
-                                ) {
-                                    try {
-                                        val refreshed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                            app.microsoft.refresh(account.refreshToken)
-                                        }
-                                        app.accounts.upsertMicrosoft(
-                                            refreshed.name, refreshed.id, refreshed.accessToken,
-                                            refreshed.refreshToken, refreshed.expiresAtMs,
-                                        )
-                                        account = app.accounts.active()
-                                    } catch (_: Exception) {
-                                        // fall back to the stored token; the console shows auth errors
-                                    }
-                                }
-                                val instance = app.instances.active()
-                                val pack = app.runtimePacks.packByName(app.settings.runtimePackValue)
-                                    ?: app.runtimePacks.packs.value.firstOrNull()
-                                if (instance != null && account != null && pack != null) {
-                                    app.gameManager.launch(context, instance, account, pack)
-                                    overlay = Overlay.Console
-                                }
+                                launchGame(context, app) { overlay = Overlay.Console }
+                            }
+                        },
+                        onDownload = {
+                            scope.launch {
+                                startSelectedDownload(app)
                             }
                         },
                         onPickVersion = { screen = Screen.VERSIONS },

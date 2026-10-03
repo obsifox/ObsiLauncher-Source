@@ -127,6 +127,101 @@ class RuntimePacks(private val context: Context) {
         }
     }
 
+    /**
+     * v1.9.0 — auto-provisioning used by the update gate: downloads ANY
+     * open-source Android JRE build (tar.xz / tar.gz), unpacks it and
+     * synthesizes the pack.json for it (finds libjvm.so, the lib dirs and
+     * wires the MobileGlues renderer flag) so the user never has to
+     * hand-build or hand-download a runtime pack.
+     */
+    suspend fun installAuto(url: String, suggestedName: String) = withContext(Dispatchers.IO) {
+        // a raw JRE unpacks with no pack.json — remember that before install()
+        val staging = File(Paths.runtimeRoot(context), ".staging-$suggestedName")
+        staging.deleteRecursively()
+        staging.mkdirs()
+        val lower = url.substringBefore('?').lowercase()
+        val archive = File(staging, if (lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) "pack.tar.gz" else "pack.tar.xz")
+        Http.downloadToFile(url, archive) { done, total ->
+            progress.value = if (total > 0) done.toFloat() / total else null
+        }
+        progress.value = null
+
+        val work = File(staging, "extract")
+        work.mkdirs()
+        if (archive.name.endsWith(".tar.gz")) {
+            java.util.zip.GZIPInputStream(FileInputStream(archive)).use { gz ->
+                TarArchiveInputStream(gz).use { tar -> untarInto(tar, work) }
+            }
+        } else {
+            TarArchiveInputStream(XZInputStream(FileInputStream(archive))).use { tar ->
+                untarInto(tar, work)
+            }
+        }
+        archive.delete()
+
+        // unwrap single top directory
+        val entries = work.listFiles()?.toList().orEmpty()
+        val root = if (entries.size == 1 && entries[0].isDirectory) entries[0] else work
+
+        // locate the JVM shared object — the launcher entry point
+        val jvmSo = sequenceOf(
+            File(root, "lib/server/libjvm.so"),
+            File(root, "lib/minimal/libjvm.so"),
+            File(root, "lib/client/libjvm.so"),
+        ).firstOrNull { it.isFile }
+            ?: root.walkTopDown().filter { it.isFile && it.name == "libjvm.so" }.firstOrNull()
+            ?: throw IllegalStateException("no libjvm.so in the downloaded runtime")
+
+        // every directory that carries native libraries feeds LD_LIBRARY_PATH
+        val libDirs = root.walkTopDown()
+            .filter { it.isFile && it.extension == "so" }
+            .map { it.parentFile }
+            .distinct()
+            .take(8)
+            .toList()
+            .ifEmpty { listOf(File(root, "lib")) }
+
+        val packJson = JSONObject().apply {
+            put("name", suggestedName)
+            put("abi", "arm64-v8a")
+            put("launcher_so", jvmSo.relativeTo(root).path)
+            put(
+                "jvm_args",
+                org.json.JSONArray()
+                    .put("-Dorg.lwjgl.opengl.libname=libMobileGlues.so"),
+            )
+            put("lib_dirs", org.json.JSONArray().apply { libDirs.forEach { put(it.relativeTo(root).path) } })
+        }
+
+        // move the runtime into place + write the generated manifest
+        val outDir = File(Paths.runtimeRoot(context), suggestedName)
+        outDir.deleteRecursively()
+        root.renameTo(outDir)
+        File(outDir, "pack.json").writeText(packJson.toString())
+        staging.deleteRecursively()
+        rescan()
+        val pack = packByName(suggestedName)
+        if (pack == null || !pack.isValid()) {
+            throw IllegalStateException("runtime pack failed validation")
+        }
+    }
+
+    private fun untarInto(tar: TarArchiveInputStream, into: File) {
+        while (true) {
+            val entry = tar.nextTarEntry ?: break
+            val target = File(into, entry.name).canonicalFile
+            // zip-slip protection
+            if (!target.path.startsWith(into.canonicalPath)) continue
+            if (entry.isDirectory) {
+                target.mkdirs()
+            } else {
+                target.parentFile?.mkdirs()
+                target.outputStream().use { tar.copyTo(it) }
+                target.setExecutable(true, true)
+            }
+        }
+    }
+
     fun remove(name: String) {
         packByName(name)?.dir?.deleteRecursively()
         rescan()

@@ -42,6 +42,18 @@ val LocalObsi = staticCompositionLocalOf {
 }
 
 private fun palette(mode: ThemeMode, dynamicAccent: Color): ObsiColors = when (mode) {
+    // v1.9.0 — the official Minecraft launcher look: charcoal panels,
+    // Minecraft-green primary, crisp white text, hard 4 dp corners
+    ThemeMode.MINECRAFT -> ObsiColors(
+        accent = Color(0xFF3C8527),          // Minecraft grass green
+        accentDim = Color(0xFF2A5C1B),
+        glass = Color(0xF21E1E21),           // solid launcher charcoal
+        glassBorder = Color(0xFF454548),
+        text = Color(0xFFFFFFFF),
+        textDim = Color(0xFFA4A4A8),
+        scrim = Color(0x66000000),
+        danger = Color(0xFFBA4A3C),
+    )
     ThemeMode.DYNAMIC -> {
         val a = dynamicAccent
         ObsiColors(
@@ -70,11 +82,11 @@ private fun palette(mode: ThemeMode, dynamicAccent: Color): ObsiColors = when (m
 }
 
 private val GlassShapes = Shapes(
-    extraSmall = RoundedCornerShape(10.dp),
-    small = RoundedCornerShape(14.dp),
-    medium = RoundedCornerShape(18.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(30.dp),
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(6.dp),
+    medium = RoundedCornerShape(10.dp),
+    large = RoundedCornerShape(14.dp),
+    extraLarge = RoundedCornerShape(18.dp),
 )
 
 private val ObsiTypography = Typography(
@@ -98,7 +110,7 @@ fun ObsiTheme(
     val dark = mode != ThemeMode.WHITE
     val scheme = darkColorScheme(
         primary = obsi.accent,
-        onPrimary = Color(0xFF17110B),
+        onPrimary = if (mode == ThemeMode.MINECRAFT) Color(0xFFFFFFFF) else Color(0xFF17110B),
         secondary = obsi.accentDim,
         background = Color(0xFF0B0908),
         surface = obsi.glass,

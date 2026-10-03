@@ -266,4 +266,9 @@
     <string name="accounts_no_active">No player yet</string>
     <string name="accounts_add_first">Add an account to start</string>
     <string name="accounts_type_offline">Offline account</string>
+    <string name="home_download_big">DOWNLOAD</string>
+    <string name="home_ready_to_download">Ready to download Minecraft %s</string>
+    <string name="instances_rename_title">Custom name</string>
+    <string name="instances_rename_save">Save</string>
+    <string name="settings_theme_minecraft">Minecraft (official launcher look)</string>
 </resources>

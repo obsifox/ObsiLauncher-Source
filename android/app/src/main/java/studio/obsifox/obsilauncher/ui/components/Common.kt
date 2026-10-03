@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 
-/** Frosted glass card used across every page. */
+/** Minecraft-launcher style panel: solid charcoal, hard 2 dp edge. */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
@@ -37,16 +37,9 @@ fun GlassCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        obsi.glass.copy(alpha = obsi.glass.alpha),
-                        obsi.glass.copy(alpha = obsi.glass.alpha * 0.82f),
-                    )
-                )
-            )
-            .border(1.dp, obsi.glassBorder, RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(6.dp))
+            .background(obsi.glass)
+            .border(1.dp, obsi.glassBorder, RoundedCornerShape(6.dp))
             .padding(horizontal = 14.dp, vertical = 11.dp),
         content = content,
     )
@@ -62,6 +55,7 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     )
 }
 
+/** Minecraft-style button: hard corners, dark edge, slight bottom bevel. */
 @Composable
 fun ObsiButton(
     text: String,
@@ -74,15 +68,15 @@ fun ObsiButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(4.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (danger) obsi.danger else obsi.accent,
-            contentColor = Color(0xFF17110B),
+            contentColor = Color.White,
             disabledContainerColor = obsi.accentDim.copy(alpha = 0.25f),
             disabledContentColor = obsi.textDim,
         ),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp),
-        modifier = modifier,
+        modifier = modifier.border(1.dp, Color(0xFF1A1A1C), RoundedCornerShape(4.dp)),
     ) {
         Text(text, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
     }
@@ -99,7 +93,8 @@ fun ObsiGhostButton(
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(4.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, obsi.glassBorder),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = obsi.text,
             disabledContentColor = obsi.textDim,

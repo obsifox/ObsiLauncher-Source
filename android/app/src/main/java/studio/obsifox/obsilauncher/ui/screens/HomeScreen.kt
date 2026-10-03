@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,6 +55,7 @@ import studio.obsifox.obsilauncher.ui.theme.LocalObsi
 @Composable
 fun HomeScreen(
     onPlay: () -> Unit,
+    onDownload: () -> Unit,
     onPickVersion: () -> Unit,
     onPickAccount: () -> Unit,
     onOpenConsole: () -> Unit,
@@ -71,14 +73,31 @@ fun HomeScreen(
     val runtimePack by app.settings.runtimePack.collectAsState()
     val gameState by app.gameManager.state.collectAsState()
     val installing by app.installer.state.collectAsState()
+    val loaderInstalling by app.loaders.state.collectAsState()
+    val selectedVersion by app.settings.selectedVersion.collectAsState()
 
     val active = instances.firstOrNull { it.id == activeId }
     val account = accounts.firstOrNull { it.id == activeAccountId }
     val pack = packs.firstOrNull { it.name == runtimePack } ?: packs.firstOrNull()
     val hasVersion = active != null && app.installer.isInstalled(active.versionId)
+
+    // ---- the big button's three states (v1.9.0) ----------------------------
+    // gray  = the selected version is not downloaded yet  -> "DOWNLOAD"
+    // blue  = a download is running (fills from the language's start side)
+    // green = downloaded and ready                        -> "PLAY"
+    val runningInstall = installing as? studio.obsifox.obsilauncher.core.game.InstallState.Running
+    val runningLoader = loaderInstalling as? studio.obsifox.obsilauncher.core.game.InstallState.Running
+    val downloadProgress: Float? = when {
+        runningInstall != null -> runningInstall.fraction
+            ?: if (runningInstall.total > 0) runningInstall.done.toFloat() / runningInstall.total else 0f
+        runningLoader != null -> runningLoader.fraction ?: 0.5f
+        else -> null
+    }
+    val canDownload = selectedVersion.isNotBlank() && downloadProgress == null &&
+        gameState != GameState.RUNNING && gameState != GameState.PREPARING
     val canPlay = hasVersion && account != null && pack != null &&
         gameState != GameState.RUNNING && gameState != GameState.PREPARING &&
-        installing !is studio.obsifox.obsilauncher.core.game.InstallState.Running
+        downloadProgress == null
 
     Box(Modifier.fillMaxSize()) {
         // empty state ----------------------------------------------------------
@@ -88,15 +107,30 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    stringResourceCompat(R.string.home_no_instances),
+                    if (canDownload) {
+                        stringResourceCompat(R.string.home_ready_to_download, selectedVersion)
+                    } else {
+                        stringResourceCompat(R.string.home_no_instances)
+                    },
                     color = obsi.text,
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.height(10.dp))
-                ObsiGhostButton(
-                    text = stringResourceCompat(R.string.versions_install),
-                    onClick = onPickVersion,
-                )
+                if (canDownload) {
+                    PlayButton(
+                        label = stringResourceCompat(R.string.home_download_big),
+                        progress = null,
+                        ready = false,
+                        enabled = true,
+                        subtitle = "",
+                        onClick = onDownload,
+                    )
+                } else {
+                    ObsiGhostButton(
+                        text = stringResourceCompat(R.string.versions_install),
+                        onClick = onPickVersion,
+                    )
+                }
             }
             return@Box
         }
@@ -145,12 +179,12 @@ fun HomeScreen(
                         },
                         accent = Color(0xFFE5A24C),
                         actionText = when {
-                            !hasVersion -> stringResourceCompat(R.string.versions_install)
+                            !hasVersion -> stringResourceCompat(R.string.home_download_big)
                             account == null -> stringResourceCompat(R.string.accounts_add)
                             else -> stringResourceCompat(R.string.settings_runtime_install)
                         },
                         onAction = when {
-                            !hasVersion -> onPickVersion
+                            !hasVersion -> onDownload
                             account == null -> onPickAccount
                             else -> onPickVersion
                         },
@@ -218,43 +252,90 @@ fun HomeScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 PlayButton(
-                    enabled = canPlay,
-                    subtitle = active?.let { loaderBadge(it) } ?: "",
-                    onClick = onPlay,
+                    label = when {
+                        downloadProgress != null -> stringResourceCompat(R.string.home_download_big)
+                        canPlay -> stringResourceCompat(R.string.home_play_big)
+                        else -> stringResourceCompat(R.string.home_download_big)
+                    },
+                    progress = downloadProgress,
+                    ready = canPlay,
+                    enabled = canPlay || canDownload,
+                    subtitle = active?.let { loaderBadge(it) } ?: selectedVersion,
+                    onClick = { if (canPlay) onPlay() else if (canDownload) onDownload() },
                 )
             }
         }
     }
 }
 
-/** The big bottom-right PLAY button from the reference design. */
+/**
+ * The big bottom-right button — PLAY when ready, DOWNLOAD otherwise.
+ * While a download runs the button fills with blue from the language's
+ * start side (right for Farsi, left for English) and turns fully green
+ * the moment the game is ready.
+ */
 @Composable
-private fun PlayButton(enabled: Boolean, subtitle: String, onClick: () -> Unit) {
-    // clearly gray while disabled — the version must be installed first
-    val container = if (enabled) LocalObsi.current.accent else Color(0x64888888)
-    val contentColor = if (enabled) Color(0xFF17110B) else Color(0xFFDDDDDD)
-    Column(
+private fun PlayButton(
+    label: String,
+    progress: Float?,
+    ready: Boolean,
+    enabled: Boolean,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    val obsi = LocalObsi.current
+    val container = when {
+        progress != null -> Color(0xFF2E2E32)             // dark base under the blue fill
+        ready -> obsi.accent                              // Minecraft green
+        enabled -> Color(0xFF6E6E72)                      // gray: not downloaded
+        else -> Color(0xFF49494D)
+    }
+    val contentColor = if (ready || enabled || progress != null) Color.White else Color(0xFFC9C9CC)
+    Box(
         Modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(container)
-            .clickable(enabled = enabled, onClick = onClick)
             .widthIn(min = 210.dp)
-            .padding(horizontal = 30.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .clip(RoundedCornerShape(10.dp))
+            .background(container)
+            .border(1.dp, Color(0xFF17181A), RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick),
     ) {
-        Text(
-            text = stringResourceCompat(R.string.home_play_big),
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 3.sp,
-            color = contentColor,
-        )
-        if (subtitle.isNotBlank()) {
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.labelMedium,
-                color = contentColor.copy(alpha = 0.75f),
+        // the fill: grows from the START corner — right side in Farsi (RTL),
+        // left side in English (LTR) — and switches green when complete
+        if (progress != null) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxWidth(progress.coerceIn(0f, 1f))
+                    .fillMaxHeight()
+                    .background(if (progress >= 1f) obsi.accent else Color(0xFF2F6FBE)),
             )
+        }
+        Column(
+            Modifier.padding(horizontal = 30.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.sp,
+                color = contentColor,
+            )
+            if (progress != null) {
+                Text(
+                    text = "${(progress.coerceIn(0f, 1f) * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = contentColor,
+                )
+            } else if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = contentColor.copy(alpha = 0.8f),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -308,6 +389,13 @@ private fun InstancePill(instance: Instance, selected: Boolean, onSelect: () -> 
             .padding(horizontal = 12.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // every pill carries its mark: grass block for vanilla builds,
+        // the loader's own icon for loader builds
+        LoaderIcon(
+            type = instance.loaderType,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(6.dp))
         Text(
             text = instance.name,
             style = MaterialTheme.typography.labelMedium,

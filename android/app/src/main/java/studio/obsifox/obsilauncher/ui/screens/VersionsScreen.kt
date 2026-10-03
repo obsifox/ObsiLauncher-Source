@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -98,6 +99,8 @@ fun VersionsScreen() {
     var childPick by remember { mutableStateOf<String?>(null) }
     var loaderPick by remember { mutableStateOf<McVersion?>(null) }
     var loaderVersionPick by remember { mutableStateOf<Pair<LoaderType, McVersion>?>(null) }
+    // custom display name for any installed version / loader build (v1.9.0)
+    var renameTarget by remember { mutableStateOf<studio.obsifox.obsilauncher.core.instance.Instance?>(null) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         TabRow(
@@ -131,15 +134,30 @@ fun VersionsScreen() {
             }
         }
 
-        when (tab) {
-            0 -> InstalledGrid(instances) { v ->
-                app.instances.setActive(v.id)
-                app.settings.selectedVersionValue = v.versionId
+        // the grids live in their own bounded box so the install banners can
+        // never push or overlap them (v1.9.0 layout fix)
+        Box(Modifier.weight(1f)) {
+            when (tab) {
+                0 -> InstalledGrid(instances, onRename = { renameTarget = it }) { v ->
+                    app.instances.setActive(v.id)
+                    app.settings.selectedVersionValue = v.versionId
+                }
+                1 -> ParentGrid(releases, manifestLoading, onOpen = { childPick = it })
+                2 -> RemoteGrid(snapshots, manifestLoading) { loaderPick = it }
+                3 -> ParentGrid(old, manifestLoading, onOpen = { childPick = it })
             }
-            1 -> ParentGrid(releases, manifestLoading, onOpen = { childPick = it })
-            2 -> RemoteGrid(snapshots, manifestLoading) { loaderPick = it }
-            3 -> ParentGrid(old, manifestLoading, onOpen = { childPick = it })
         }
+    }
+
+    renameTarget?.let { target ->
+        RenameInstanceDialog(
+            currentName = target.name,
+            onDismiss = { renameTarget = null },
+            onConfirm = { newName ->
+                app.instances.rename(target.id, newName)
+                renameTarget = null
+            },
+        )
     }
 
     // step 1: the parent's children ------------------------------------------
@@ -221,6 +239,7 @@ private fun VersionCard(
     selected: Boolean,
     loaderType: LoaderType? = null,
     badge: String? = null,
+    onRename: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val obsi = LocalObsi.current
@@ -292,11 +311,32 @@ private fun VersionCard(
                     .padding(horizontal = 8.dp, vertical = 3.dp),
             )
         }
+        // custom-name affordance: small pencil chip below the badge (v1.9.0)
+        if (onRename != null) {
+            Text(
+                "\u270E",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 8.dp)
+                    .offset(y = if (badge != null) 32.dp else 8.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(Color(0x66000000))
+                    .border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(7.dp))
+                    .clickable(onClick = onRename)
+                    .padding(horizontal = 7.dp, vertical = 2.dp),
+            )
+        }
     }
 }
 
 @Composable
-private fun InstalledGrid(instances: List<Instance>, onSelect: (Instance) -> Unit) {
+private fun InstalledGrid(
+    instances: List<Instance>,
+    onRename: (Instance) -> Unit,
+    onSelect: (Instance) -> Unit,
+) {
     val context = LocalContext.current
     val app = context.app
     val obsi = LocalObsi.current
@@ -320,6 +360,7 @@ private fun InstalledGrid(instances: List<Instance>, onSelect: (Instance) -> Uni
                 badge = stringResourceCompat(R.string.versions_selected).takeIf {
                     instance.id == app.instances.activeId.value
                 },
+                onRename = { onRename(instance) },
                 onClick = { onSelect(instance) },
             )
         }
@@ -477,6 +518,32 @@ private fun ParentCard(
                 .padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
+}
+
+/** v1.9.0 — set a custom display name for an installed version / loader build. */
+@Composable
+private fun RenameInstanceDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var text by remember { mutableStateOf(currentName) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResourceCompat(R.string.instances_rename_title)) },
+        text = {
+            androidx.compose.material3.OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            ObsiTextButton(stringResourceCompat(R.string.instances_rename_save), onClick = { onConfirm(text) })
+        },
+        dismissButton = { ObsiTextButton(stringResourceCompat(R.string.cancel), onClick = onDismiss) },
+    )
 }
 
 /** the parent's children, newest first, ids inside orange boxes. */

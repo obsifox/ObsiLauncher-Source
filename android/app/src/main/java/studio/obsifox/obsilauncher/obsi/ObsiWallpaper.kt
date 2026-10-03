@@ -388,12 +388,14 @@ fun ObsiWallpaperLayer(wallpaper: ObsiWallpaper, blurPx: Int, modifier: Modifier
                     .then(if (blurPx > 0) Modifier.blur(blurPx.dp()) else Modifier),
             )
         }
+        // v1.9.0: the artwork stays CLEAR — only a light veil darkens it a
+        // touch, gently deeper at the bottom where the dashboard sits
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0x80000000), Color(0x14000000), Color(0xA6000000))
+                        listOf(Color(0x26000000), Color(0x1F000000), Color(0x8C000000))
                     )
                 )
         )

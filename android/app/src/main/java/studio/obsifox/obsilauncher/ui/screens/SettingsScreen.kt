@@ -394,6 +394,7 @@ private fun LookPanel() {
 
     PanelTitle(stringResourceCompat(R.string.settings_appearance))
     val modes = listOf(
+        ThemeMode.MINECRAFT to stringResourceCompat(R.string.settings_theme_minecraft),
         ThemeMode.DYNAMIC to stringResourceCompat(R.string.settings_theme_dynamic),
         ThemeMode.OBSIDIAN to stringResourceCompat(R.string.settings_theme_obsidian),
         ThemeMode.VANILLA to stringResourceCompat(R.string.settings_theme_vanilla),

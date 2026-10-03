@@ -19,7 +19,7 @@ object Paths {
     fun customWallpaper(ctx: Context): File = File(obsiRoot(ctx), "custom-bg")
 }
 
-enum class ThemeMode { DYNAMIC, OBSIDIAN, VANILLA, WHITE }
+enum class ThemeMode { MINECRAFT, DYNAMIC, OBSIDIAN, VANILLA, WHITE }
 
 /**
  * The launcher ships two background engines:
@@ -59,10 +59,13 @@ class ObsiSettings(context: Context) {
     // ---- flows (Compose reads these) ---------------------------------------
 
     val selectedVersion = state("selected_version", "", ::str)
-    val themeMode = state("theme_mode", ThemeMode.DYNAMIC) { p, k ->
-        runCatching { ThemeMode.valueOf(p.getString(k, ThemeMode.DYNAMIC.name) ?: "") }.getOrDefault(ThemeMode.DYNAMIC)
+    val themeMode = state("theme_mode", ThemeMode.MINECRAFT) { p, k ->
+        runCatching { ThemeMode.valueOf(p.getString(k, ThemeMode.MINECRAFT.name) ?: "") }.getOrDefault(ThemeMode.MINECRAFT)
     }
-    val blur = state("blur", 14) { p, k -> p.getInt(k, 14).coerceIn(0, 25) }
+
+    // v1.9.0: backgrounds are sharp by default (blur key renamed so existing
+    // installs pick up the new clear look)
+    val blur = state("blur_clear", 0) { p, k -> p.getInt(k, 0).coerceIn(0, 25) }
     val customWallpaper = state("custom_wallpaper", "", ::str)
     val memoryMb = state("memory_mb", 2048) { p, k -> p.getInt(k, 2048).coerceIn(512, 8192) }
     val javaArgs = state("java_args", "", ::str)

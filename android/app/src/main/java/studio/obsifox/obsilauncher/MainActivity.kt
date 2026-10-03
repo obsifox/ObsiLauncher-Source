@@ -5,6 +5,9 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import studio.obsifox.obsilauncher.core.game.GameState
@@ -36,6 +39,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // fully immersive: the status/notification bar and the navigation bar
+        // are hidden for the whole session (swipe from the edge to peek)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        insetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
         val app = application as App
 
         setContent {
@@ -55,7 +67,9 @@ class MainActivity : ComponentActivity() {
             )
 
             Box(modifier = Modifier.fillMaxSize()) {
-                ObsiWallpaperLayer(wallpaper = app.wallpaper, blurPx = blur, modifier = Modifier.fillMaxSize())
+                // the background stays CRYSTAL clear (no blur) with only a
+                // light darkening veil — v1.9.0 design decision
+                ObsiWallpaperLayer(wallpaper = app.wallpaper, blurPx = 0, modifier = Modifier.fillMaxSize())
                 ObsiTheme(mode = themeMode, dynamicAccent = androidx.compose.ui.graphics.Color(accent)) {
                     ObsiApp()
                 }

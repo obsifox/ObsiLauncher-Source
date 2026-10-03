@@ -266,4 +266,9 @@
     <string name="accounts_no_active">هنوز بازیکنی نیست</string>
     <string name="accounts_add_first">برای شروع یک حساب اضافه کن</string>
     <string name="accounts_type_offline">حساب آفلاین</string>
+    <string name="home_download_big">دانلود</string>
+    <string name="home_ready_to_download">آمادهٔ دانلود ماینکرفت %s</string>
+    <string name="instances_rename_title">نام دلخواه</string>
+    <string name="instances_rename_save">ذخیره</string>
+    <string name="settings_theme_minecraft">ماینکرفت (شکل لانچر رسمی)</string>
 </resources>

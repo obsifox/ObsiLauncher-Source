@@ -161,6 +161,13 @@ fun BrowseScreen() {
         search(kind, "", "")
     }
 
+    // v1.9.0: the mods page opens STRAIGHT INTO Modrinth — popular mods of
+    // the active category stream in immediately, ready to download; no
+    // extra taps needed before the download button appears.
+    LaunchedEffect(Unit) {
+        if (activeKind == null && results.isEmpty()) open(ProjectKind.MOD)
+    }
+
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             // category strip — 10dp under the top bar, four slim chips -------

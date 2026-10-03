@@ -178,7 +178,7 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
             }
         }
 
-        // bottom-left brand: the ObsiLauncher mark ------------------------------
+        // bottom-left brand: the uploaded Minecraft-Launcher mark ----------------
         Row(
             Modifier.align(Alignment.BottomStart).padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -190,7 +190,7 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
                 modifier = Modifier
                     .size(34.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, Color(0x40F26A1B), RoundedCornerShape(8.dp)),
+                    .border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(8.dp)),
             )
             Spacer(Modifier.width(9.dp))
             Text("ObsiLauncher", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = Color(0xFFF4EFEA))
@@ -220,26 +220,15 @@ fun UpdateGateScreen(onEnter: () -> Unit) {
     }
 }
 
-/** The red Mojang Studios wordmark — drawn with type, no image assets. */
+/** The real red Mojang Studios wordmark (bundled image, as briefed). */
 @Composable
 private fun MojangWordmark() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = "MOJANG",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 3.sp,
-            color = Color(0xFFDB2F26),
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "S T U D I O S",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 4.sp,
-            color = Color(0xFFDB2F26),
-        )
-    }
+    Image(
+        painter = painterResource(R.drawable.mojang_logo),
+        contentDescription = "Mojang Studios",
+        contentScale = ContentScale.FillWidth,
+        modifier = Modifier.fillMaxWidth(0.42f),
+    )
 }
 
 @Composable

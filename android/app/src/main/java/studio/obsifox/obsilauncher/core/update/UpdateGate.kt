@@ -78,35 +78,79 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
             return@withContext
         }
 
-        // auto-provision: the repo publishes default packs in runtime.json
-        try {
-            val manifest = JSONObject(
-                Http.get(RUNTIME_MANIFEST_URL) ?: throw IllegalStateException("no manifest"),
-            )
-            val packs = manifest.optJSONArray("packs")
-            var lastError: Exception? = null
-            if (packs != null) {
-                for (i in 0 until packs.length()) {
-                    val p = packs.optJSONObject(i) ?: continue
-                    val url = p.optString("url")
-                    val abi = p.optString("abi", "arm64-v8a")
-                    if (url.isBlank() || abi != "arm64-v8a") continue
-                    try {
-                        step.value = Step.InstallingRuntime(null)
-                        runtimePacks.install(url, RuntimePacks.nameFor(url))
-                        runtimePacks.rescan()
-                        if (runtimePacks.packs.value.any { it.isValid() }) {
-                            step.value = Step.Ready
-                            return@withContext
-                        }
-                    } catch (e: Exception) {
-                        lastError = e
-                    }
+        // ---- auto-provision, no questions asked ----------------------------
+        // the app carries its own download links (v1.9.0): the gate resolves
+        // them itself — the user NEVER downloads a JVM/runtime by hand.
+        var lastError: Exception? = null
+        for (url in resolveRuntimeUrls()) {
+            try {
+                step.value = Step.InstallingRuntime(null)
+                runtimePacks.installAuto(url, RuntimePacks.nameFor(url))
+                runtimePacks.rescan()
+                if (runtimePacks.packs.value.any { it.isValid() }) {
+                    step.value = Step.Ready
+                    return@withContext
                 }
+            } catch (e: Exception) {
+                lastError = e
             }
-            step.value = if (lastError != null) Step.RuntimeFailed else Step.RuntimeMissing
+        }
+        step.value = if (lastError != null) Step.RuntimeFailed else Step.RuntimeMissing
+    }
+
+    /**
+     * Runtime download links, resolved from what the app carries inside:
+     *  1. the repo's runtime.json (so links can be fixed without an update)
+     *  2. the BUILT-IN catalog below — known open-source Android JRE builds
+     *     (PojavLauncher-family, GPL) resolved through the GitHub API.
+     */
+    private suspend fun resolveRuntimeUrls(): List<String> {
+        val urls = mutableListOf<String>()
+        runCatching {
+            val manifest = JSONObject(Http.get(RUNTIME_MANIFEST_URL) ?: return@runCatching)
+            val packs = manifest.optJSONArray("packs") ?: return@runCatching
+            for (i in 0 until packs.length()) {
+                val p = packs.optJSONObject(i) ?: continue
+                val url = p.optString("url")
+                if (url.isNotBlank() && p.optString("abi", "arm64-v8a") == "arm64-v8a") urls += url
+            }
+        }
+        if (urls.isEmpty()) urls += builtinRuntimeUrls()
+        return urls
+    }
+
+    /**
+     * The built-in catalog: queries the openjdk-for-android releases feed and
+     * returns every arm64 JRE 21/17 asset it publishes, newest first. Falls
+     * back to the pinned direct links when the API is unreachable.
+     */
+    private suspend fun builtinRuntimeUrls(): List<String> = withContext(Dispatchers.IO) {
+        val direct = listOf(
+            // pinned fallbacks (jre builds published for the PojavLauncher family)
+            "https://github.com/PojavLauncherTeam/android-openjdk-build-multiarch/releases/download/jre21-2023/jre21-arm64-2023-10-24.tar.xz",
+            "https://github.com/PojavLauncherTeam/android-openjdk-build-multiarch/releases/download/jre17-2023/jre17-arm64-2023-02-04.tar.xz",
+        )
+        try {
+            val text = Http.get(OPENJDK_RELEASES_API) ?: return@withContext direct
+            val arr = org.json.JSONArray(text)
+            val found = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                val rel = arr.optJSONObject(i) ?: continue
+                val assets = rel.optJSONArray("assets") ?: continue
+                for (j in 0 until assets.length()) {
+                    val a = assets.optJSONObject(j) ?: continue
+                    val name = a.optString("name").lowercase()
+                    val url = a.optString("browser_download_url")
+                    if (url.isBlank()) continue
+                    val archOk = name.contains("arm64") || name.contains("aarch64")
+                    val jreOk = name.contains("jre") && (name.contains("jre21") || name.contains("21") || name.contains("17"))
+                    if (archOk && jreOk && (name.endsWith(".tar.xz") || name.endsWith(".tar.gz"))) found += url
+                }
+                if (found.size >= 3) break
+            }
+            found.ifEmpty { direct }
         } catch (_: Exception) {
-            step.value = Step.RuntimeMissing
+            direct
         }
     }
 
@@ -147,6 +191,10 @@ class UpdateGate(private val context: Context, private val runtimePacks: Runtime
         /** fetched from the repo so pack URLs can be fixed without an app update */
         const val RUNTIME_MANIFEST_URL =
             "https://raw.githubusercontent.com/obsifox/ObsiLauncher-Source/main/runtime.json"
+
+        /** the open-source Android JRE builds the built-in catalog resolves */
+        const val OPENJDK_RELEASES_API =
+            "https://api.github.com/repos/PojavLauncherTeam/android-openjdk-build-multiarch/releases?per_page=30"
 
         /** semantic-ish comparison: 1.10.0 > 1.9.9 */
         fun isNewer(candidate: String, current: String): Boolean {
